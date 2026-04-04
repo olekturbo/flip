@@ -6,18 +6,110 @@
   <title>Rules — Flip 7</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    body { display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem 4rem; }
-    .rules-page-box { width: 100%; max-width: 640px; }
-    .rules-page-box h2.rules-title { margin-bottom: 1.5rem; }
-    .back-link { display: inline-block; margin-bottom: 1.5rem; color: var(--text-dim); font-size: 0.88rem; text-decoration: none; }
+    body {
+      background: linear-gradient(135deg, #0f2617 0%, #1a5c2a 60%, #0f4020 100%);
+      min-height: 100vh;
+      padding: 1.5rem 1rem 4rem;
+    }
+
+    .rules-page {
+      max-width: 640px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .back-link {
+      display: inline-block;
+      color: var(--text-dim);
+      font-size: 0.88rem;
+      text-decoration: none;
+    }
     .back-link:hover { color: var(--text); }
+
+    .rules-page h2 {
+      font-size: 1.4rem;
+      color: var(--gold-light);
+      font-weight: 800;
+    }
+
+    .rules-page section {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .rules-page h3 {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gold);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.25rem;
+      margin-bottom: 0.1rem;
+    }
+
+    .rules-page p,
+    .rules-page li { font-size: 0.88rem; color: var(--text); line-height: 1.55; }
+
+    .rules-page ul,
+    .rules-page ol { padding-left: 1.4rem; display: flex; flex-direction: column; gap: 0.25rem; }
+
+    .rules-page strong { color: var(--gold-light); }
+    .rules-page em     { color: var(--text-dim); }
+
+    .rules-page .rules-note {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    /* Card + description rows */
+    .rules-page .rules-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .rules-page .rules-card-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    .rules-page .rules-card-row .card {
+      flex-shrink: 0;
+      width: 48px;
+      height: 34px;
+      font-size: 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.15);
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .rules-page .rules-card-row span:last-child {
+      min-width: 0;
+    }
   </style>
 </head>
-<body class="game-page">
-  <div class="rules-page-box">
+<body>
+  <div class="rules-page">
     <a href="/" class="back-link">← Back to home</a>
 
-    <h2 class="rules-title">How to Play — Flip 7</h2>
+    <h2>How to Play — Flip 7</h2>
 
     <section>
       <h3>Goal</h3>
@@ -32,33 +124,32 @@
         <li><strong>Positive modifier cards (6):</strong> +2, +4, +6, +8, +10, ×2.</li>
         <li><strong>Negative modifier cards (6):</strong> -2, -4, -6, -8, -10, ÷2.</li>
       </ul>
-      <p class="rules-note">The deck is <em>not</em> reshuffled between rounds — it carries over. It's only reshuffled when it runs out.</p>
+      <p class="rules-note">The deck carries over between rounds and is reshuffled only when it runs out.</p>
     </section>
 
     <section>
       <h3>Each Round</h3>
       <ol>
-        <li>The dealer deals <strong>one card face-up</strong> to every player (starting left of dealer). Action cards resolve immediately during dealing.</li>
-        <li>Play passes left of the dealer. On your turn you have two options:
+        <li>The dealer deals <strong>one card face-up</strong> to every player. Action cards resolve immediately during dealing.</li>
+        <li>Play passes left of dealer. On your turn:
           <ul>
-            <li><strong>Draw</strong> — take <em>one</em> card from the deck, then the turn passes to the next player.</li>
-            <li><strong>Stay</strong> — bank your current points and exit the round (you keep your score).</li>
+            <li><strong>Draw</strong> — take one card; turn passes to next player.</li>
+            <li><strong>Stay</strong> — bank your points and exit the round.</li>
           </ul>
         </li>
-        <li>Number cards build your hand. Modifier and Action cards are placed above the line.</li>
-        <li>After all players have either Stayed, been Frozen, or busted the round ends.</li>
+        <li>Round ends when all players have Stayed, been Frozen, or busted.</li>
       </ol>
     </section>
 
     <section>
       <h3>Busting</h3>
-      <p>Drawing a number you <strong>already have</strong> = bust. You score <strong>0</strong> this round.</p>
+      <p>Drawing a number you <strong>already hold</strong> = bust. You score <strong>0</strong> this round.</p>
       <p class="rules-note">Only duplicate number cards cause a bust — action and modifier cards never do.</p>
     </section>
 
     <section>
       <h3>Action Cards</h3>
-      <p>When you draw one, you <strong>choose any active player</strong> to receive its effect (including yourself). If you're the only active player, it targets you automatically.</p>
+      <p>Choose any active player to receive the effect (including yourself). Auto-targets you if you're the only active player.</p>
       <div class="rules-cards">
         <div class="rules-card-row">
           <span class="card card-freeze">Freeze</span>
@@ -66,11 +157,11 @@
         </div>
         <div class="rules-card-row">
           <span class="card card-flip3">Flip 3</span>
-          <span>Chosen player must <strong>draw 3 cards</strong> one at a time. The sequence stops early on a bust or Flip 7. Action cards drawn during Flip 3 are deferred and resolve interactively after all non-bust draws complete.</span>
+          <span>Chosen player draws <strong>3 cards</strong> one at a time. Stops early on bust or Flip 7. Action cards drawn during Flip 3 resolve interactively after all draws complete.</span>
         </div>
         <div class="rules-card-row">
           <span class="card card-second_chance">2nd Chance</span>
-          <span>Chosen player holds this card. If they would bust, <strong>discard both</strong> the duplicate and this card — they survive but <strong>their turn ends</strong> (play passes to the next player). Only one Second Chance per player at a time.</span>
+          <span>If holder would bust, <strong>discard both</strong> the duplicate and this card — they survive but <strong>their turn ends</strong>. Only one per player at a time.</span>
         </div>
       </div>
     </section>
@@ -84,8 +175,8 @@
         </div>
         <div class="rules-card-row">
           <span class="card card-modifier_mul">×2</span>
-          <span><strong>Doubles</strong> your number-card total first, then modifiers are applied on top.<br>
-            <em>Example: numbers = 19 → ×2 = 38 → +10 = 48 pts</em></span>
+          <span><strong>Doubles</strong> your number-card total; modifiers applied on top.<br>
+            <em>Example: 19 → ×2 = 38 → +10 = 48 pts</em></span>
         </div>
         <div class="rules-card-row">
           <span class="card card-modifier_sub">-N</span>
@@ -93,17 +184,17 @@
         </div>
         <div class="rules-card-row">
           <span class="card card-modifier_div">÷2</span>
-          <span><strong>Halves</strong> your number-card total (rounded down), then modifiers are applied on top. Cancels out with ×2 if both held.<br>
-            <em>Example: numbers = 18 → ÷2 = 9 → -4 = 5 pts</em></span>
+          <span><strong>Halves</strong> your number-card total (rounded down); modifiers applied on top. Cancels out with ×2 if both held.<br>
+            <em>Example: 18 → ÷2 = 9 → −4 = 5 pts</em></span>
         </div>
       </div>
     </section>
 
     <section>
       <h3>Flip 7 Bonus 🎉</h3>
-      <p>Collect <strong>7 unique number cards</strong> without busting → round ends immediately for everyone.</p>
+      <p>Collect <strong>7 unique number cards</strong> → round ends immediately for everyone.</p>
       <ul>
-        <li>You score: number total + modifiers + <strong>+15 bonus points</strong>.</li>
+        <li>You score your normal total + <strong>+15 bonus points</strong>.</li>
         <li>All other active players bank whatever they currently hold.</li>
       </ul>
     </section>
@@ -112,17 +203,16 @@
       <h3>Scoring</h3>
       <ol>
         <li>Sum of your number cards.</li>
-        <li>Apply ×2 or ÷2 (if held; they cancel each other out).</li>
-        <li>Add +modifier cards and subtract -modifier cards.</li>
-        <li>Score cannot go below <strong>0</strong>.</li>
-        <li>Busted players score <strong>0</strong>.</li>
+        <li>Apply ×2 or ÷2 if held (they cancel each other out).</li>
+        <li>Add +modifiers and subtract −modifiers.</li>
+        <li>Score cannot go below <strong>0</strong>. Busted players score <strong>0</strong>.</li>
       </ol>
     </section>
 
     <section>
       <h3>Winning</h3>
-      <p>Game ends at the <strong>end of a round</strong> in which one player has the highest score at or above 200 points.</p>
-      <p>If two or more players are <strong>tied at 200+</strong>, the round ends normally but the game continues — keep playing until one player pulls clearly ahead.</p>
+      <p>Game ends at the end of a round in which one player has the <strong>strictly highest score at or above 200</strong>.</p>
+      <p>If two or more players are <strong>tied at 200+</strong>, rounds continue until one player pulls clearly ahead.</p>
     </section>
   </div>
 </body>
