@@ -24,6 +24,18 @@ func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
 		json.NewEncoder(w).Encode(map[string]string{"roomID": roomID})
 	})
 
+	// REST: check if a room exists and return its phase.
+	mux.HandleFunc("GET /api/rooms/{roomID}", func(w http.ResponseWriter, r *http.Request) {
+		roomID := r.PathValue("roomID")
+		room := h.GetRoom(roomID)
+		if room == nil {
+			http.Error(w, "room not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"roomID": roomID, "phase": room.Phase()})
+	})
+
 	// WebSocket upgrade for an existing (or newly created) room.
 	mux.HandleFunc("/ws/{roomID}", func(w http.ResponseWriter, r *http.Request) {
 		roomID := r.PathValue("roomID")

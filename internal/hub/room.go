@@ -253,6 +253,13 @@ func (r *Room) removeClient(sessionID string, c *Client) {
 	r.mu.Unlock()
 }
 
+// Phase returns the current game phase as a string (for the status API).
+func (r *Room) Phase() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return string(r.game.Phase)
+}
+
 func (r *Room) isEmpty() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

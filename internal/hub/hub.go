@@ -17,6 +17,13 @@ func New() *Hub {
 	return &Hub{rooms: make(map[string]*Room)}
 }
 
+// GetRoom returns the existing room with id, or nil if it doesn't exist.
+func (h *Hub) GetRoom(id string) *Room {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.rooms[id]
+}
+
 // GetOrCreateRoom returns the existing room with id, or creates a new one.
 func (h *Hub) GetOrCreateRoom(id string) *Room {
 	h.mu.Lock()
