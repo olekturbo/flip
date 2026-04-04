@@ -1,5 +1,8 @@
 # Flip 7 — Multiplayer Web Game
 
+[![CI](https://github.com/olekturbo/flip/actions/workflows/ci.yml/badge.svg)](https://github.com/olekturbo/flip/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/olekturbo/flip/graph/badge.svg)](https://codecov.io/gh/olekturbo/flip)
+
 A faithful digital adaptation of the **Flip 7** card game by [The Op](https://theop.games/pages/flip-7), playable in the browser with 2–6 players over WebSockets.
 
 ## Playing the Game
