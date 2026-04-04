@@ -16,11 +16,11 @@ Rules are available in-game via the **Rules** button.
 
 ## Rules Summary
 
-### Deck — 100 cards
+### Deck — 103 cards
 | Type | Cards |
 |------|-------|
 | Number cards | 0–12; card N appears N times (0 appears once) → **79 cards** |
-| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance → **9 cards** |
+| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief → **12 cards** |
 | Positive modifier cards | +2, +4, +6, +8, +10, ×2 → **6 cards** |
 | Negative modifier cards | -2, -4, -6, -8, -10, ÷2 → **6 cards** |
 
@@ -86,9 +86,9 @@ The test suite has two layers:
 
 | File | What it tests |
 |------|---------------|
-| `deck_test.go` | Deck composition — 100 cards, correct counts per type and value |
+| `deck_test.go` | Deck composition — 103 cards, correct counts per type and value |
 | `player_test.go` | `RoundScore()` (table-driven), `HasNumber()`, `UniqueNumberCount()` |
-| `game_test.go` | Game mechanics — draw, bust, Second Chance, Stop, Freeze, Flip 3, Flip 7, win condition, tie at 200+, dealing-phase SC, valid targets, player management |
+| `game_test.go` | Game mechanics — draw, bust, Second Chance, Stop, Freeze, Flip 3, Flip 7, Thief, win condition, tie at 200+, dealing-phase SC, valid targets, player management |
 
 **BDD feature tests** (`bdd_test.go` + `features/*.feature`) — [godog](https://github.com/cucumber/godog) with Gherkin:
 

@@ -432,15 +432,29 @@ function renderPlaying() {
 
   if (pa) {
     if (pa.drawerID === playerID) {
-      const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance' };
+      const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
-      sndActionCard();
+      pa.card.type === 'thief' ? sndThief() : sndActionCard();
       el('targeting-card-name').textContent = `You drew: ${cardLabel}`;
-      el('targeting-buttons').innerHTML = (pa.validTargetIDs || []).map(tid => {
-        const tp = gameState.players.find(p => p.id === tid);
-        const label = tp ? esc(tp.name) + (tid === playerID ? ' (you)' : '') : tid;
-        return `<button class="btn-target" onclick="sendTarget('${tid}')">${label}</button>`;
-      }).join('');
+
+      if (pa.card.type === 'thief' && pa.thiefVictimID) {
+        // Stage 2: victim chosen — pick which card to steal
+        const victim = gameState.players.find(p => p.id === pa.thiefVictimID);
+        el('targeting-prompt').textContent =
+          `Steal a card from ${victim ? esc(victim.name) : '?'}:`;
+        el('targeting-buttons').innerHTML = (pa.stealableCards || []).map(c =>
+          `<button class="btn-target card card-n-${c.value}" onclick="sendSteal(${c.value})">${esc(c.name)}</button>`
+        ).join('');
+      } else {
+        // Stage 1 (all action cards): pick a player
+        const prompt = pa.card.type === 'thief' ? 'Choose a player to steal from:' : 'Choose a target:';
+        el('targeting-prompt').textContent = prompt;
+        el('targeting-buttons').innerHTML = (pa.validTargetIDs || []).map(tid => {
+          const tp = gameState.players.find(p => p.id === tid);
+          const label = tp ? esc(tp.name) + (tid === playerID ? ' (you)' : '') : tid;
+          return `<button class="btn-target" onclick="sendTarget('${tid}')">${label}</button>`;
+        }).join('');
+      }
       show('targeting-overlay');
     } else {
       const drawer = gameState.players.find(p => p.id === pa.drawerID);
@@ -461,6 +475,14 @@ function renderPlaying() {
 function sendTarget(targetID) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ action: 'target', targetID }));
+  } else {
+    showToast('Not connected — reconnecting…');
+  }
+}
+
+function sendSteal(cardValue) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: 'steal', cardValue }));
   } else {
     showToast('Not connected — reconnecting…');
   }

@@ -137,6 +137,15 @@ function sndActionCard() {
   });
 }
 
+// Thief card — sneaky descending swipe
+function sndThief() {
+  play(ctx => {
+    const t = ctx.currentTime;
+    freqRamp(ctx, 'sawtooth', 800, 300, t,        0.14, 0.20);
+    freqRamp(ctx, 'triangle', 600, 200, t + 0.07, 0.10, 0.15);
+  });
+}
+
 // ── Mute toggle ───────────────────────────────────────────────────────────────
 function toggleMute() {
   muted = !muted;

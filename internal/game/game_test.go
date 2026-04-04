@@ -586,3 +586,145 @@ func TestReconnectingSameSessionReusesPlayer(t *testing.T) {
 		t.Error("Rejoin should return the same player pointer")
 	}
 }
+
+// ─── Thief ───────────────────────────────────────────────────────────────────
+
+// TestThiefStealsCard: drawing Thief creates pending stage-1, Target selects
+// victim (stage-2), Steal moves the chosen card from victim to thief.
+func TestThiefStealsCard(t *testing.T) {
+	g, alice, bob := makeGame(
+		[]Card{NumberCard(3)},            // Alice's hand
+		[]Card{NumberCard(5), NumberCard(7)}, // Bob's hand
+		ThiefCard(),                      // Alice draws this
+	)
+
+	// Alice draws the Thief card.
+	if err := g.Draw("sa"); err != nil {
+		t.Fatalf("Draw() error: %v", err)
+	}
+
+	// Should be pending stage 1 (player selection).
+	if g.pending == nil || g.pending.Card.Type != CardTypeThief {
+		t.Fatal("expected Thief pending action after draw")
+	}
+	if g.pending.ThiefVictim != nil {
+		t.Error("ThiefVictim should be nil at stage 1")
+	}
+
+	// Alice selects Bob as victim.
+	if err := g.Target("sa", "bob"); err != nil {
+		t.Fatalf("Target() error: %v", err)
+	}
+	if g.pending == nil || g.pending.ThiefVictim != bob {
+		t.Fatal("expected ThiefVictim = bob after Target()")
+	}
+
+	// Alice steals Bob's 5.
+	if err := g.Steal("sa", 5); err != nil {
+		t.Fatalf("Steal() error: %v", err)
+	}
+
+	if !alice.HasNumber(5) {
+		t.Error("Alice should have stolen 5 from Bob")
+	}
+	if bob.HasNumber(5) {
+		t.Error("Bob should no longer have 5")
+	}
+	if g.pending != nil {
+		t.Error("pending should be nil after steal resolves")
+	}
+	// Turn should have advanced to Bob.
+	if g.CurrentIndex != 1 {
+		t.Errorf("CurrentIndex = %d, want 1 (Bob)", g.CurrentIndex)
+	}
+}
+
+// TestThiefCannotStealDuplicateNumber: a card Alice already holds is not offered.
+func TestThiefCannotStealDuplicateNumber(t *testing.T) {
+	g, _, _ := makeGame(
+		[]Card{NumberCard(5)},   // Alice already has 5
+		[]Card{NumberCard(5)},   // Bob also has 5
+		ThiefCard(),
+	)
+
+	if err := g.Draw("sa"); err != nil {
+		t.Fatalf("Draw() error: %v", err)
+	}
+
+	// Bob has 5, but Alice already has 5 — no stealable cards → Thief discarded automatically.
+	if g.pending != nil {
+		t.Errorf("expected Thief to be discarded (no valid steal), got pending %+v", g.pending)
+	}
+}
+
+// TestThiefNoOpponentNumbers: Thief is discarded when the only opponent has no number cards.
+func TestThiefNoOpponentNumbers(t *testing.T) {
+	g, _, _ := makeGame(
+		[]Card{NumberCard(3)}, // Alice
+		[]Card{},              // Bob has no number cards
+		ThiefCard(),
+	)
+
+	if err := g.Draw("sa"); err != nil {
+		t.Fatalf("Draw() error: %v", err)
+	}
+
+	if g.pending != nil {
+		t.Errorf("expected Thief discarded (opponent has no stealable cards), got pending")
+	}
+}
+
+// TestThiefInvalidCardValueReturnsError: Steal() with a value not in stealable list fails.
+func TestThiefInvalidCardValueReturnsError(t *testing.T) {
+	g, _, _ := makeGame(
+		[]Card{NumberCard(3)},
+		[]Card{NumberCard(7)},
+		ThiefCard(),
+	)
+
+	_ = g.Draw("sa")
+	_ = g.Target("sa", "bob")
+
+	if err := g.Steal("sa", 9); err == nil {
+		t.Error("Steal() with invalid card value should return error")
+	}
+}
+
+// TestThiefTriggersFlip7: stealing the 7th unique number card triggers Flip 7.
+func TestThiefTriggersFlip7(t *testing.T) {
+	g, alice, bob := makeGame(
+		[]Card{NumberCard(1), NumberCard(2), NumberCard(3), NumberCard(4), NumberCard(5), NumberCard(6)},
+		[]Card{NumberCard(7)},
+		ThiefCard(),
+	)
+
+	_ = g.Draw("sa")
+	_ = g.Target("sa", "bob")
+	if err := g.Steal("sa", 7); err != nil {
+		t.Fatalf("Steal() error: %v", err)
+	}
+
+	if alice.UniqueNumberCount() != 7 {
+		t.Errorf("Alice should have 7 unique numbers, has %d", alice.UniqueNumberCount())
+	}
+	// Flip 7 ends the round.
+	if g.Phase != PhaseRoundEnd {
+		t.Errorf("Phase = %s, want round_end after Flip 7 via Thief", g.Phase)
+	}
+	_ = bob
+}
+
+// TestThiefStealBeforeTargetReturnsError: calling Steal() before Target() fails.
+func TestThiefStealBeforeTargetReturnsError(t *testing.T) {
+	g, _, _ := makeGame(
+		[]Card{NumberCard(3)},
+		[]Card{NumberCard(7)},
+		ThiefCard(),
+	)
+
+	_ = g.Draw("sa")
+	// pending is at stage 1; no ThiefVictim yet.
+	if err := g.Steal("sa", 7); err == nil {
+		t.Error("Steal() before Target() should return error")
+	}
+}

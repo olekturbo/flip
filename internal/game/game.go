@@ -28,8 +28,9 @@ const (
 
 // pendingAction holds an action card awaiting target selection by the drawer.
 type pendingAction struct {
-	Card      Card
-	DrawerIdx int
+	Card         Card
+	DrawerIdx    int
+	ThiefVictim  *Player // non-nil during Thief stage 2 (card selection after player chosen)
 }
 
 // PendingActionState is the JSON-serialisable form broadcast to clients.
@@ -37,6 +38,9 @@ type PendingActionState struct {
 	Card           Card     `json:"card"`
 	DrawerID       string   `json:"drawerID"`
 	ValidTargetIDs []string `json:"validTargetIDs"`
+	// Thief stage 2: victim already chosen, now pick which card to steal.
+	ThiefVictimID  string `json:"thiefVictimID,omitempty"`
+	StealableCards []Card `json:"stealableCards,omitempty"`
 }
 
 // GameState is the JSON-serialisable snapshot broadcast to clients.
@@ -115,6 +119,21 @@ func (g *Game) processDeferredCards() {
 
 		p := g.deferredFor
 		if p == nil || p.Status != StatusActive || g.Phase != PhasePlaying {
+			continue
+		}
+
+		// Thief always requires two-stage interaction — skip the auto-resolve path.
+		if dc.Type == CardTypeThief {
+			thiefTargets := g.validThiefTargets(p)
+			if len(thiefTargets) == 0 {
+				g.logEvent("  Thief (deferred) — no valid target, discarded")
+				g.Message = "Thief (deferred from Flip 3) — no valid target to steal from, discarded."
+				g.UsedCards = append(g.UsedCards, dc)
+			} else {
+				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
+				g.Message = fmt.Sprintf("%s drew Thief during Flip 3 — choose a player to steal from!", p.Name)
+				return
+			}
 			continue
 		}
 
@@ -240,10 +259,30 @@ func (g *Game) TickInactive() bool {
 		drawer := g.Players[g.pending.DrawerIdx]
 		if !drawer.Connected && time.Since(drawer.DisconnectedAt) > TurnSkipDelay {
 			card := g.pending.Card
+			victim := g.pending.ThiefVictim
 			g.pending = nil
-			targets := g.validTargetsFor(card)
-			if len(targets) > 0 {
-				g.resolveActionWithTarget(drawer, card, g.playerByID(targets[0]))
+
+			if card.Type == CardTypeThief {
+				if victim == nil {
+					thiefTargets := g.validThiefTargets(drawer)
+					if len(thiefTargets) > 0 {
+						victim = g.playerByID(thiefTargets[0])
+					}
+				}
+				if victim != nil {
+					stealable := g.stealableCardsFor(drawer, victim)
+					if len(stealable) > 0 {
+						g.applyThiefSteal(drawer, victim, stealable[0], card)
+						if g.Phase == PhasePlaying {
+							g.advanceTurn()
+						}
+					}
+				}
+			} else {
+				targets := g.validTargetsFor(card)
+				if len(targets) > 0 {
+					g.resolveActionWithTarget(drawer, card, g.playerByID(targets[0]))
+				}
 			}
 			changed = true
 		}
@@ -361,8 +400,14 @@ func (g *Game) Target(sessionID, targetID string) error {
 	}
 
 	// Validate target is in the valid set for this card.
+	var validIDs []string
+	if g.pending.Card.Type == CardTypeThief {
+		validIDs = g.validThiefTargets(drawer)
+	} else {
+		validIDs = g.validTargetsFor(g.pending.Card)
+	}
 	valid := false
-	for _, id := range g.validTargetsFor(g.pending.Card) {
+	for _, id := range validIDs {
 		if id == targetID {
 			valid = true
 			break
@@ -373,6 +418,14 @@ func (g *Game) Target(sessionID, targetID string) error {
 	}
 
 	card := g.pending.Card
+
+	// Thief stage 1 → 2: victim chosen; await card selection via Steal().
+	if card.Type == CardTypeThief && g.pending.ThiefVictim == nil {
+		g.pending.ThiefVictim = target
+		g.Message = fmt.Sprintf("%s chose to steal from %s — pick a card!", drawer.Name, target.Name)
+		return nil
+	}
+
 	g.pending = nil
 	g.resolveActionWithTarget(drawer, card, target)
 	if g.deferredFor != nil {
@@ -380,6 +433,57 @@ func (g *Game) Target(sessionID, targetID string) error {
 		g.processDeferredCards()
 	} else if g.inDealing {
 		g.continueDealing()
+	}
+	return nil
+}
+
+// Steal resolves the card-selection stage (stage 2) of a pending Thief action.
+// cardValue is the Value of the number card to steal from the already-chosen victim.
+func (g *Game) Steal(sessionID string, cardValue int) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.Phase != PhasePlaying {
+		return fmt.Errorf("game is not in progress")
+	}
+	if g.pending == nil || g.pending.Card.Type != CardTypeThief {
+		return fmt.Errorf("no Thief action awaiting card selection")
+	}
+	if g.pending.ThiefVictim == nil {
+		return fmt.Errorf("choose a player to steal from first")
+	}
+	drawer := g.Players[g.pending.DrawerIdx]
+	if drawer.SessionID != sessionID {
+		return fmt.Errorf("it is not your action to resolve")
+	}
+
+	victim := g.pending.ThiefVictim
+	stealable := g.stealableCardsFor(drawer, victim)
+	var chosen Card
+	found := false
+	for _, c := range stealable {
+		if c.Value == cardValue {
+			chosen = c
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("card %d is not available to steal from %s", cardValue, victim.Name)
+	}
+
+	thiefCard := g.pending.Card
+	g.pending = nil
+	g.applyThiefSteal(drawer, victim, chosen, thiefCard)
+
+	if g.Phase == PhasePlaying {
+		if g.deferredFor != nil {
+			g.processDeferredCards()
+		} else if g.inDealing {
+			g.continueDealing()
+		} else if !g.inDeferred {
+			g.advanceTurn()
+		}
 	}
 	return nil
 }
@@ -460,10 +564,28 @@ func (g *Game) State() GameState {
 	var pendingState *PendingActionState
 	if g.pending != nil {
 		drawer := g.Players[g.pending.DrawerIdx]
-		pendingState = &PendingActionState{
-			Card:           g.pending.Card,
-			DrawerID:       drawer.ID,
-			ValidTargetIDs: g.validTargetsFor(g.pending.Card),
+		switch {
+		case g.pending.Card.Type == CardTypeThief && g.pending.ThiefVictim != nil:
+			// Stage 2: victim chosen — show stealable cards for selection.
+			pendingState = &PendingActionState{
+				Card:           g.pending.Card,
+				DrawerID:       drawer.ID,
+				ThiefVictimID:  g.pending.ThiefVictim.ID,
+				StealableCards: g.stealableCardsFor(drawer, g.pending.ThiefVictim),
+			}
+		case g.pending.Card.Type == CardTypeThief:
+			// Stage 1: choose which player to steal from.
+			pendingState = &PendingActionState{
+				Card:           g.pending.Card,
+				DrawerID:       drawer.ID,
+				ValidTargetIDs: g.validThiefTargets(drawer),
+			}
+		default:
+			pendingState = &PendingActionState{
+				Card:           g.pending.Card,
+				DrawerID:       drawer.ID,
+				ValidTargetIDs: g.validTargetsFor(g.pending.Card),
+			}
 		}
 	}
 
@@ -600,6 +722,18 @@ func (g *Game) dealCardTo(p *Player) {
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
 			g.Message = fmt.Sprintf("%s was dealt %s — choose a target!", p.Name, card.Name)
 		}
+
+	case CardTypeThief:
+		targets := g.validThiefTargets(p)
+		if len(targets) == 0 {
+			g.logEvent("%s dealt Thief — no valid target, discarded", p.Name)
+			g.Message = fmt.Sprintf("%s was dealt Thief — no valid target, discarded.", p.Name)
+			g.UsedCards = append(g.UsedCards, card)
+		} else {
+			g.logEvent("%s dealt Thief — choosing target", p.Name)
+			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
+			g.Message = fmt.Sprintf("%s was dealt Thief — choose a player to steal from!", p.Name)
+		}
 	}
 }
 
@@ -685,6 +819,22 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
 			g.Message = fmt.Sprintf("%s drew %s — choose a target!", p.Name, card.Name)
 		}
+
+	case CardTypeThief:
+		if inFlip3 {
+			return []Card{card} // defer; don't resolve yet
+		}
+		targets := g.validThiefTargets(p)
+		if len(targets) == 0 {
+			g.logEvent("%s drew Thief — no valid target, discarded", p.Name)
+			g.Message = fmt.Sprintf("%s drew Thief — no card to steal, discarded.", p.Name)
+			g.UsedCards = append(g.UsedCards, card)
+			g.advanceTurn()
+		} else {
+			// Always pending: two-stage choice (player, then card).
+			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
+			g.Message = fmt.Sprintf("%s drew Thief — choose a player to steal from!", p.Name)
+		}
 	}
 
 	return nil
@@ -761,6 +911,21 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		if !g.inDealing && !g.inDeferred {
 			g.advanceTurn()
 		}
+
+	case CardTypeThief:
+		// Auto-steal: used when Thief is resolved via resolveActionWithTarget
+		// (e.g. auto-resolution path). Take the first stealable card.
+		stealable := g.stealableCardsFor(drawer, target)
+		if len(stealable) > 0 {
+			g.applyThiefSteal(drawer, target, stealable[0], card)
+		} else {
+			g.UsedCards = append(g.UsedCards, card)
+			g.logEvent("%s Thief on %s — nothing to steal, discarded", drawer.Name, target.Name)
+			g.Message = fmt.Sprintf("%s used Thief on %s — nothing to steal, discarded.", drawer.Name, target.Name)
+		}
+		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
+			g.advanceTurn()
+		}
 	}
 }
 
@@ -805,7 +970,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 		g.logEvent("  %s drew %s (Flip 3)", p.Name, card.Name)
 		g.Message = fmt.Sprintf("%s drew %s (Flip 3).", p.Name, card.Name)
 
-	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance:
+	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance, CardTypeThief:
 		return []Card{card}, false // defer; resolve after all 3 cards drawn
 	}
 
@@ -865,6 +1030,66 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		} else {
 			g.Message = fmt.Sprintf("Second Chance (deferred) discarded — %s already holds one.", target.Name)
 		}
+
+	case CardTypeThief:
+		// Auto-steal: pick the first stealable card from the first valid opponent.
+		for _, opp := range g.Players {
+			if opp == target || opp.Status != StatusActive {
+				continue
+			}
+			stealable := g.stealableCardsFor(target, opp)
+			if len(stealable) > 0 {
+				g.applyThiefSteal(target, opp, stealable[0], card)
+				return
+			}
+		}
+		g.UsedCards = append(g.UsedCards, card)
+		g.logEvent("  Thief (auto) — no stealable target, discarded")
+		g.Message = "Thief (deferred) — no valid target to steal from, discarded."
+	}
+}
+
+// validThiefTargets returns IDs of active opponents from whom drawer can steal
+// at least one number card they don't already hold.
+func (g *Game) validThiefTargets(drawer *Player) []string {
+	var ids []string
+	for _, p := range g.Players {
+		if p == drawer || p.Status != StatusActive {
+			continue
+		}
+		if len(g.stealableCardsFor(drawer, p)) > 0 {
+			ids = append(ids, p.ID)
+		}
+	}
+	return ids
+}
+
+// stealableCardsFor returns the number cards victim holds that drawer does not.
+func (g *Game) stealableCardsFor(drawer, victim *Player) []Card {
+	var cards []Card
+	for _, c := range victim.Cards {
+		if c.Type == CardTypeNumber && !drawer.HasNumber(c.Value) {
+			cards = append(cards, c)
+		}
+	}
+	return cards
+}
+
+// applyThiefSteal moves stolenCard from victim's hand to thief's hand, discards
+// the Thief card, and triggers Flip 7 if thief now holds 7 unique numbers.
+func (g *Game) applyThiefSteal(thief, victim *Player, stolenCard, thiefCard Card) {
+	for i, c := range victim.Cards {
+		if c.Type == CardTypeNumber && c.Value == stolenCard.Value {
+			victim.Cards = append(victim.Cards[:i], victim.Cards[i+1:]...)
+			break
+		}
+	}
+	thief.Cards = append(thief.Cards, stolenCard)
+	g.UsedCards = append(g.UsedCards, thiefCard)
+	g.logEvent("%s stole %s from %s", thief.Name, stolenCard.Name, victim.Name)
+	g.Message = fmt.Sprintf("%s used Thief — stole %s from %s!", thief.Name, stolenCard.Name, victim.Name)
+	if thief.UniqueNumberCount() == 7 {
+		g.triggerFlip7(thief)
 	}
 }
 

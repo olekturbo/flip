@@ -14,6 +14,7 @@ const (
 	CardTypeModifierMul  CardType = "modifier_mul" // ×2
 	CardTypeModifierSub  CardType = "modifier_sub" // -2, -4, -6, -8, -10
 	CardTypeModifierDiv  CardType = "modifier_div" // ÷2
+	CardTypeThief        CardType = "thief"
 )
 
 // Card is a single card in the deck.
@@ -31,3 +32,4 @@ func ModifierAddCard(v int) Card { return Card{Type: CardTypeModifierAdd, Value:
 func ModifierMulCard() Card      { return Card{Type: CardTypeModifierMul, Name: "×2"} }
 func ModifierSubCard(v int) Card { return Card{Type: CardTypeModifierSub, Value: -v, Name: fmt.Sprintf("-%d", v)} }
 func ModifierDivCard() Card      { return Card{Type: CardTypeModifierDiv, Name: "÷2"} }
+func ThiefCard() Card            { return Card{Type: CardTypeThief, Name: "Thief"} }

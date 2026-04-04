@@ -19,7 +19,8 @@ type ClientMessage struct {
 	Action    string `json:"action"`
 	Name      string `json:"name"`
 	SessionID string `json:"sessionID"`
-	TargetID  string `json:"targetID"` // for "target" action
+	TargetID  string `json:"targetID"`  // for "target" action
+	CardValue int    `json:"cardValue"` // for "steal" action (Thief card)
 }
 
 // Client wraps a WebSocket connection with a per-connection write lock.
@@ -194,6 +195,8 @@ func (r *Room) handleAction(sessionID string, msg ClientMessage) {
 		actionErr = r.game.Stop(sessionID)
 	case "target":
 		actionErr = r.game.Target(sessionID, msg.TargetID)
+	case "steal":
+		actionErr = r.game.Steal(sessionID, msg.CardValue)
 	case "restart":
 		actionErr = r.game.Restart(sessionID)
 	default:

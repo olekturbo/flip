@@ -362,6 +362,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 .card-modifier_mul  { background: #b45309; color: #fef3c7; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 .card-modifier_sub  { background: #991b1b; color: #fecaca; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 .card-modifier_div  { background: #7c2d12; color: #fed7aa; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
+.card-thief         { background: #1e293b; color: #94a3b8; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 
 /* ─── Target selection overlay ──────────────────────────────────────────────── */
 .targeting-overlay {
