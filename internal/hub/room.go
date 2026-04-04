@@ -118,9 +118,17 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	client := &Client{conn: conn, sessionID: sessionID, playerID: player.ID}
 	r.addClient(client)
 	defer func() {
-		r.removeClient(sessionID)
-		r.game.Disconnect(sessionID)
-		r.broadcastState() // notify others of disconnection
+		// Only remove this specific client — a newer connection may have already
+		// replaced it in the map (mobile reconnect race condition).
+		r.removeClient(sessionID, client)
+		// Only mark disconnected if no replacement client is active.
+		r.mu.RLock()
+		_, stillConnected := r.clients[sessionID]
+		r.mu.RUnlock()
+		if !stillConnected {
+			r.game.Disconnect(sessionID)
+			r.broadcastState() // notify others of disconnection
+		}
 	}()
 
 	// ── Step 4: send private join confirmation ──────────────────────────────
@@ -136,18 +144,19 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	// ── Step 5: broadcast current state to everyone ─────────────────────────
 	r.broadcastState()
 
-	// ── Step 6: heartbeat — ping every 30 s, close on failure ───────────────
+	// ── Step 6: heartbeat — ping every 15 s, close on failure ───────────────
 	// Browsers respond to WebSocket pings automatically with a pong frame;
-	// no JS-side handling is needed.
+	// no JS-side handling is needed.  15 s is short enough to detect mobile
+	// connections killed by backgrounding within a reasonable time.
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
+				pingCtx, pingCancel := context.WithTimeout(ctx, 5*time.Second)
 				err := conn.Ping(pingCtx)
 				pingCancel()
 				if err != nil {
@@ -232,9 +241,15 @@ func (r *Room) addClient(c *Client) {
 	r.mu.Unlock()
 }
 
-func (r *Room) removeClient(sessionID string) {
+// removeClient removes the client from the map only if it is still the
+// registered client for that session.  This prevents a reconnecting player's
+// new connection from being evicted when the old goroutine's deferred cleanup
+// finally runs.
+func (r *Room) removeClient(sessionID string, c *Client) {
 	r.mu.Lock()
-	delete(r.clients, sessionID)
+	if r.clients[sessionID] == c {
+		delete(r.clients, sessionID)
+	}
 	r.mu.Unlock()
 }
 

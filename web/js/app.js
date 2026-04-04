@@ -10,6 +10,7 @@ let gameState        = null;
 let prevPlayers      = [];   // previous player states for animation diffs
 let ws               = null;
 let reconnectDelay   = 1000;
+let reconnectTimer   = null; // handle for the scheduled reconnect setTimeout
 let overlayTimer     = null; // delayed round-end / game-over overlay
 let shownOverlayPhase = null; // which phase the overlay was already shown for
 
@@ -42,6 +43,18 @@ function submitName() {
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 function connect() {
+  // Silently tear down any existing socket so its onclose won't schedule
+  // another reconnect on top of this one.
+  if (ws !== null) {
+    ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
+    ws.close();
+    ws = null;
+  }
+  if (reconnectTimer !== null) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws/${roomID}`);
 
@@ -62,16 +75,33 @@ function connect() {
 
   ws.onclose = () => {
     setConnStatus('err', 'Disconnected — reconnecting…');
-    setTimeout(connect, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 2, 16000);
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
   };
 
   ws.onerror = () => setConnStatus('warn', 'Connection error');
 }
 
+// Reconnect immediately when the tab comes back to the foreground (mobile
+// browsers pause JS when backgrounded, so the scheduled timer may never fire).
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && (!ws || ws.readyState !== WebSocket.OPEN)) {
+    reconnectDelay = 1000;
+    connect();
+  }
+});
+
+// Reconnect immediately when the device regains network connectivity.
+window.addEventListener('online', () => {
+  reconnectDelay = 1000;
+  connect();
+});
+
 function sendAction(action) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ action }));
+  } else {
+    showToast('Not connected — reconnecting…');
   }
 }
 
@@ -288,6 +318,8 @@ function renderPlaying() {
 function sendTarget(targetID) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ action: 'target', targetID }));
+  } else {
+    showToast('Not connected — reconnecting…');
   }
 }
 
