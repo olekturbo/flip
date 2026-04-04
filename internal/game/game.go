@@ -571,9 +571,15 @@ func (g *Game) dealCardTo(p *Player) {
 	switch card.Type {
 	case CardTypeNumber:
 		if p.HasNumber(card.Value) {
-			p.Cards = append(p.Cards, card)
-			p.Status = StatusBusted
-			g.logEvent("%s dealt %d — BUSTED (duplicate)", p.Name, card.Value)
+			if p.HasSecondChance {
+				g.consumeSecondChance(p)
+				g.logEvent("%s survived dealing bust with 2nd Chance (dealt %d)", p.Name, card.Value)
+				g.Message = fmt.Sprintf("%s was dealt %d (duplicate!) — Second Chance used!", p.Name, card.Value)
+			} else {
+				p.Cards = append(p.Cards, card)
+				p.Status = StatusBusted
+				g.logEvent("%s dealt %d — BUSTED (duplicate)", p.Name, card.Value)
+			}
 		} else {
 			p.Cards = append(p.Cards, card)
 			g.logEvent("%s dealt %d", p.Name, card.Value)

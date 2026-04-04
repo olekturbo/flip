@@ -224,8 +224,11 @@ function render() {
       sndFlip7();
     }
 
-    // Second Chance consumed: hasSecondChance flipped true→false while still active
-    if (prev && prev.hasSecondChance && !p.hasSecondChance && p.status !== 'busted') {
+    // Second Chance consumed: hasSecondChance flipped true→false while player
+    // was already active (guards against false positive on round transition where
+    // ResetForRound zeroes SC while prevPlayers still holds the old value).
+    if (prev && prev.hasSecondChance && !p.hasSecondChance &&
+        prevStat === 'active' && p.status === 'active') {
       const pid = p.id, pname = p.name;
       // Parse the duplicate value from the message (e.g. "drew 9 (duplicate!)")
       const scMatch = gameState.message.match(/drew (\d+) .*duplicate/);
