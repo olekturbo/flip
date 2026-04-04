@@ -13,6 +13,8 @@ let reconnectDelay   = 1000;
 let reconnectTimer   = null; // handle for the scheduled reconnect setTimeout
 let overlayTimer     = null; // delayed round-end / game-over overlay
 let shownOverlayPhase = null; // which phase the overlay was already shown for
+let countdownInterval = null; // client-side 1s ticker for next-round countdown
+let countdownSecs     = 0;
 
 // Per-player card reveal state (for Flip 3 stagger)
 const revealProgress = {}; // playerId → currently-visible card count
@@ -544,12 +546,36 @@ function renderRoundEnd() {
     </tr>`;
   }).join('');
 
+  // Sync server value; start or keep client-side 1s ticker
   if (gameState.nextRoundIn > 0) {
-    el('round-end-countdown').textContent =
-      `Next round in ${gameState.nextRoundIn}s…`;
+    countdownSecs = gameState.nextRoundIn;
+    updateCountdownDisplay();
+    if (!countdownInterval) {
+      countdownInterval = setInterval(() => {
+        countdownSecs = Math.max(0, countdownSecs - 1);
+        updateCountdownDisplay();
+      }, 1000);
+    }
   } else {
+    clearCountdown();
     el('round-end-countdown').textContent = 'Starting next round…';
   }
+}
+
+function updateCountdownDisplay() {
+  const el2 = el('round-end-countdown');
+  if (!el2) return;
+  if (countdownSecs > 0) {
+    el2.textContent = `Next round in ${countdownSecs}…`;
+    el2.dataset.secs = countdownSecs;
+  } else {
+    el2.textContent = 'Starting next round…';
+  }
+}
+
+function clearCountdown() {
+  if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+  countdownSecs = 0;
 }
 
 // ── Game over ─────────────────────────────────────────────────────────────────
@@ -694,6 +720,7 @@ function esc(str)     { return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;
 
 function hideAllOverlays() {
   ['lobby-overlay','round-end-overlay','game-over-overlay'].forEach(hide);
+  clearCountdown();
 }
 
 function setConnStatus(level, text) {
