@@ -22,16 +22,14 @@
     <div class="card-panel">
       <h2>Join a Room</h2>
       <input id="room-code" type="text" placeholder="Enter room code (e.g. a3f7b2)"
-             maxlength="6" oninput="this.value=this.value.toLowerCase()"
+             maxlength="6"
+             oninput="this.value=this.value.toLowerCase(); document.getElementById('btn-join').className='btn btn-large '+(this.value.trim()?'btn-primary':'btn-secondary')"
              onkeydown="if(event.key==='Enter') joinRoom()">
-      <button class="btn btn-secondary btn-large" onclick="joinRoom()">Join Room</button>
+      <button id="btn-join" class="btn btn-secondary btn-large" onclick="joinRoom()">Join Room</button>
     </div>
 
     <div class="rules">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:1rem">
-        <h3 style="margin:0">How to play</h3>
-        <a href="/rules.html" style="font-size:0.8rem;font-weight:600;color:var(--gold-light);text-decoration:none;white-space:nowrap;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:5px;padding:2px 8px;">Full rules →</a>
-      </div>
+      <h3>How to play</h3>
       <ul>
         <li>On your turn: <strong>Draw</strong> a card or <strong>Stop</strong> and bank your points.</li>
         <li>Draw a duplicate number → <strong>bust</strong> and lose all round points.</li>
@@ -41,6 +39,7 @@
         <li>Modifier cards add/subtract points or double/halve your total.</li>
         <li>First to <strong>200</strong> wins!</li>
       </ul>
+      <a href="/rules.html" style="display:inline-block;margin-top:0.6rem;font-size:0.8rem;font-weight:600;color:var(--gold-light);text-decoration:none;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:5px;padding:3px 10px;">Full rules →</a>
     </div>
   </div>
 
