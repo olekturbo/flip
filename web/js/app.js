@@ -143,13 +143,15 @@ function render() {
     const prevStat  = prev ? prev.status       : null;
     const newCount  = p.cards.length - prevCount;
 
-    // Card arrival: start staggered reveal (or instant for single draws)
-    if (newCount > 0 && revealProgress[p.id] === undefined) {
+    // Card arrival: start staggered reveal (or instant for single draws).
+    // Guard with prev so reconnecting to an existing game doesn't replay animations.
+    if (prev && newCount > 0 && revealProgress[p.id] === undefined) {
       startCardReveals(p, prevCount);
     }
 
-    // Flip 3 banner: 2+ new cards signals the target was hit
-    if (newCount >= 2) {
+    // Flip 3 banner: 2+ new cards signals the target was hit.
+    // Guard with prev to avoid false positives on reconnect.
+    if (prev && newCount >= 2) {
       showActionBanner(`🎲 ${p.name} — Flip 3!`, 'rgba(194,65,12,0.95)');
     }
 
@@ -208,7 +210,7 @@ function render() {
     }
 
     // Flip 7 bonus earned
-    if (p.roundBonus > 0 && !(prev && prev.roundBonus > 0)) {
+    if (prev && p.roundBonus > 0 && !prev.roundBonus) {
       showActionBanner(`🎉 ${p.name} — FLIP 7! +${p.roundBonus} bonus!`, 'rgba(120,53,15,0.97)');
     }
 
