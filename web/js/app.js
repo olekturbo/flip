@@ -14,6 +14,10 @@ let reconnectTimer   = null; // handle for the scheduled reconnect setTimeout
 let overlayTimer     = null; // delayed round-end / game-over overlay
 let shownOverlayPhase = null; // which phase the overlay was already shown for
 
+// Per-player card reveal state (for Flip 3 stagger)
+const revealProgress = {}; // playerId → currently-visible card count
+const revealTimers   = {}; // playerId → array of setTimeout handles
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 if (!roomID) {
   window.location.href = '/';
@@ -130,58 +134,83 @@ function handleMessage(msg) {
 function render() {
   if (!gameState) return;
 
-  // Detect new cards before rendering (for animation)
-  const newCardOwners = [];
+  // ── 1. Diff against previous state ────────────────────────────────────────
+  const prevSnapshot = prevPlayers.slice();
+
   gameState.players.forEach(p => {
-    const prev = prevPlayers.find(pp => pp.id === p.id);
+    const prev      = prevSnapshot.find(pp => pp.id === p.id);
     const prevCount = prev ? prev.cards.length : 0;
-    if (p.cards.length > prevCount) {
-      newCardOwners.push({ id: p.id, count: p.cards.length - prevCount });
+    const prevStat  = prev ? prev.status       : null;
+    const newCount  = p.cards.length - prevCount;
+
+    // Card arrival: start staggered reveal (or instant for single draws)
+    if (newCount > 0 && revealProgress[p.id] === undefined) {
+      startCardReveals(p, prevCount);
+    }
+
+    // Flip 3 banner: 2+ new cards signals the target was hit
+    if (newCount >= 2) {
+      showActionBanner(`🎲 ${p.name} — Flip 3!`, 'rgba(194,65,12,0.95)');
+    }
+
+    // Status transition animations (run after grid is in DOM, hence setTimeout)
+    if (prevStat && prevStat !== p.status) {
+      const pid = p.id, pname = p.name;
+      if (p.status === 'frozen') {
+        showActionBanner(`❄️ ${pname} was frozen!`, 'rgba(29,78,216,0.95)');
+        setTimeout(() => {
+          const panel = document.querySelector(`[data-player-id="${pid}"]`);
+          if (panel) {
+            panel.classList.add('just-frozen');
+            panel.addEventListener('animationend', () => panel.classList.remove('just-frozen'), { once: true });
+          }
+        }, 80);
+      }
+      if (p.status === 'busted') {
+        setTimeout(() => {
+          const panel = document.querySelector(`[data-player-id="${pid}"]`);
+          if (panel) {
+            panel.classList.add('just-busted');
+            panel.addEventListener('animationend', () => panel.classList.remove('just-busted'), { once: true });
+          }
+        }, 80);
+      }
     }
   });
 
-  // Header stats
+  // ── 2. Static UI updates ───────────────────────────────────────────────────
   el('hdr-round').textContent = gameState.roundNumber || '—';
   el('hdr-deck').textContent  = gameState.deckSize !== undefined ? gameState.deckSize : '—';
-
-  // Deck pile count
   const deckCountEl = el('deck-pile-count');
   if (deckCountEl) deckCountEl.textContent = (gameState.deckSize || 0) + ' cards';
 
-  // Message bar
   el('message-bar').textContent = gameState.message || '';
-
-  // Event log
   updateEventLog(gameState.events);
 
-  // Players grid (always rendered)
+  // ── 3. Render players (respects revealProgress for card visibility) ────────
   renderPlayersGrid();
 
-  // Trigger animations for players who got new cards
-  newCardOwners.forEach(({ id, count }) => {
-    for (let i = 0; i < count; i++) {
-      setTimeout(() => flyCardFromDeck(id), i * 120);
+  // ── 4. card-new animation for single-draw cards ────────────────────────────
+  // (Multi-card stagger is handled inside startCardReveals)
+  gameState.players.forEach(p => {
+    const prev      = prevSnapshot.find(pp => pp.id === p.id);
+    const prevCount = prev ? prev.cards.length : 0;
+    if (p.cards.length - prevCount === 1 && revealProgress[p.id] === undefined) {
+      setTimeout(() => {
+        const panel = document.querySelector(`[data-player-id="${p.id}"]`);
+        if (!panel) return;
+        const cards = panel.querySelectorAll('.card:not(.card-bust-marker)');
+        if (cards.length > 0) {
+          const last = cards[cards.length - 1];
+          last.classList.add('card-new');
+          last.addEventListener('animationend', () => last.classList.remove('card-new'), { once: true });
+        }
+      }, 65);
     }
-    // Animate the last card(s) in the player's panel
-    setTimeout(() => {
-      const panel = document.querySelector(`[data-player-id="${id}"]`);
-      if (!panel) return;
-      const cards = panel.querySelectorAll('.card:not(.card-bust-marker)');
-      // Animate newly added cards
-      const total = gameState.players.find(p => p.id === id)?.cards.length || 0;
-      const prev = prevPlayers.find(pp => pp.id === id);
-      const prevCount = prev ? prev.cards.length : 0;
-      const newCount = total - prevCount;
-      for (let j = Math.max(0, cards.length - newCount); j < cards.length; j++) {
-        const c = cards[j];
-        c.classList.add('card-new');
-        c.addEventListener('animationend', () => c.classList.remove('card-new'), { once: true });
-      }
-    }, count * 120 + 20);
   });
 
-  // Save state for next diff
-  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards] }));
+  // ── 5. Persist snapshot (includes status for next diff) ───────────────────
+  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status }));
 
   // Phase-specific UI
   hideAllOverlays();
@@ -200,18 +229,20 @@ function render() {
     }
     case 'round_end':
     case 'game_over': {
+      // Cancel any in-progress Flip 3 reveal sequences — round is over.
+      clearAllRevealTimers();
       const phase = gameState.phase;
-      const render = phase === 'round_end' ? renderRoundEnd : renderGameOver;
+      const renderFn = phase === 'round_end' ? renderRoundEnd : renderGameOver;
       if (shownOverlayPhase === phase) {
         // Already shown — just refresh content (e.g. countdown tick)
-        render();
+        renderFn();
       } else {
         // First time entering this phase — delay 1 s so the final action is visible
         if (overlayTimer) clearTimeout(overlayTimer);
         overlayTimer = setTimeout(() => {
           overlayTimer = null;
           shownOverlayPhase = phase;
-          render();
+          renderFn();
         }, 1000);
       }
       break;
@@ -323,6 +354,83 @@ function sendTarget(targetID) {
   }
 }
 
+// ── Card reveal helpers (Flip 3 stagger) ─────────────────────────────────────
+
+function clearRevealTimers(playerId) {
+  (revealTimers[playerId] || []).forEach(clearTimeout);
+  delete revealTimers[playerId];
+  delete revealProgress[playerId];
+}
+
+function clearAllRevealTimers() {
+  Object.keys(revealProgress).forEach(clearRevealTimers);
+}
+
+// Reveal `player.cards` incrementally, starting from `prevCount`.
+// Single new card → instant fly + reveal.
+// Multiple new cards (Flip 3) → fly + reveal every STAGGER ms.
+function startCardReveals(player, prevCount) {
+  const totalNew = player.cards.length - prevCount;
+  if (totalNew <= 0) return;
+
+  clearRevealTimers(player.id);
+
+  if (totalNew === 1) {
+    // Single draw: fly animation, card appears immediately in DOM.
+    flyCardFromDeck(player.id);
+    return;
+  }
+
+  // Flip 3 (or similar multi-card event): stagger reveals.
+  const STAGGER    = 700;  // ms between cards
+  const START      = 350;  // brief pause so the banner/message can land first
+
+  revealProgress[player.id] = prevCount;
+  revealTimers[player.id]   = [];
+
+  for (let i = 0; i < totalNew; i++) {
+    const handle = setTimeout(() => {
+      if (revealProgress[player.id] === undefined) return; // cancelled (e.g. round ended)
+      revealProgress[player.id] = prevCount + i + 1;
+
+      flyCardFromDeck(player.id);
+      renderPlayersGrid();   // re-render with one more card visible
+
+      // card-new CSS animation on the revealed card
+      setTimeout(() => {
+        const panel = document.querySelector(`[data-player-id="${player.id}"]`);
+        if (!panel) return;
+        const cards = panel.querySelectorAll('.card:not(.card-bust-marker)');
+        const cardEl = cards[prevCount + i];
+        if (cardEl) {
+          cardEl.classList.add('card-new');
+          cardEl.addEventListener('animationend', () => cardEl.classList.remove('card-new'), { once: true });
+        }
+      }, 70);
+
+      if (i === totalNew - 1) delete revealProgress[player.id];
+    }, START + i * STAGGER);
+
+    revealTimers[player.id].push(handle);
+  }
+}
+
+// ── Action banner ─────────────────────────────────────────────────────────────
+
+function showActionBanner(text, bgColor) {
+  const banner = document.createElement('div');
+  banner.className = 'action-banner';
+  banner.style.background = bgColor;
+  document.body.appendChild(banner);
+  // Double rAF ensures the initial opacity:0 state is painted before transition.
+  requestAnimationFrame(() => requestAnimationFrame(() => banner.classList.add('action-banner-show')));
+  setTimeout(() => {
+    banner.classList.remove('action-banner-show');
+    banner.classList.add('action-banner-hide');
+    setTimeout(() => banner.remove(), 400);
+  }, 2200);
+}
+
 // ── Round end ─────────────────────────────────────────────────────────────────
 function renderRoundEnd() {
   show('round-end-overlay');
@@ -395,8 +503,11 @@ function renderPlayerPanel(p, i) {
     inactive: 'Inactive',
   }[p.status] || p.status;
 
-  const cards = (p.cards || []).map((c, ci) => {
-    const isBustCard = p.status === 'busted' && ci === p.cards.length - 1;
+  // During Flip 3 stagger, show only the cards revealed so far.
+  const visibleCount = revealProgress[p.id] !== undefined ? revealProgress[p.id] : (p.cards || []).length;
+  const visibleCards = (p.cards || []).slice(0, visibleCount);
+  const cards = visibleCards.map((c, ci) => {
+    const isBustCard = p.status === 'busted' && ci === visibleCards.length - 1 && visibleCount >= (p.cards || []).length;
     const numClass = c.type === 'number' ? ` card-n-${c.value}` : '';
     return `<div class="card card-${c.type}${numClass}${isBustCard ? ' card-bust-marker' : ''}" title="${esc(c.name)}">${esc(c.name)}</div>`;
   }).join('');
