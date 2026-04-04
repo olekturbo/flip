@@ -22,7 +22,7 @@ const (
 	WinScore       = 200
 	ReconnectGrace = 60 * time.Second
 	TurnSkipDelay  = 30 * time.Second
-	AutoNextRound  = 3 * time.Second
+	AutoNextRound  = 4 * time.Second
 	MaxPlayers     = 6
 )
 
