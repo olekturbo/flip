@@ -166,6 +166,10 @@ function render() {
           }
         }, 80);
       }
+      if (p.status === 'stopped') {
+        const pts = p.roundScore != null ? p.roundScore : '?';
+        showActionBanner(`🏦 ${pname} stopped — ${pts} pts`, 'rgba(22,101,52,0.95)');
+      }
       if (p.status === 'busted') {
         // If Flip 3 stagger is in progress, delay banner/shake to coincide with
         // the bust card being revealed (last card of the stagger).
@@ -201,6 +205,11 @@ function render() {
           }
         }, bustDelay);
       }
+    }
+
+    // Flip 7 bonus earned
+    if (p.roundBonus > 0 && !(prev && prev.roundBonus > 0)) {
+      showActionBanner(`🎉 ${p.name} — FLIP 7! +${p.roundBonus} bonus!`, 'rgba(120,53,15,0.97)');
     }
 
     // Second Chance consumed: hasSecondChance flipped true→false while still active
@@ -279,7 +288,7 @@ function render() {
   });
 
   // ── 5. Persist snapshot (includes status for next diff) ───────────────────
-  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance }));
+  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0 }));
 
   // Phase-specific UI
   hideAllOverlays();
