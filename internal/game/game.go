@@ -82,9 +82,13 @@ type Game struct {
 	Message      string
 	Winners      []*Player // one or more players (tie is possible)
 	roundEndedAt time.Time
-	dealingQueue []int // player indices still to receive initial card
-	inDealing    bool  // true while initial deal is in progress
-	events       []string
+	dealingQueue   []int   // player indices still to receive initial card
+	inDealing      bool    // true while initial deal is in progress
+	deferredCards  []Card  // action cards queued for resolution after a Flip 3
+	deferredFor    *Player // the Flip 3 target who must choose targets for deferred cards
+	deferredAdvance bool   // call advanceTurn once all deferred cards are resolved
+	inDeferred     bool    // true while processDeferredCards is running (suppresses advanceTurn)
+	events         []string
 }
 
 // logEvent appends a message to the event history (capped at 80 entries).
@@ -92,6 +96,47 @@ func (g *Game) logEvent(format string, args ...interface{}) {
 	g.events = append(g.events, fmt.Sprintf(format, args...))
 	if len(g.events) > 80 {
 		g.events = g.events[len(g.events)-80:]
+	}
+}
+
+// processDeferredCards resolves action cards that were drawn during a Flip 3 one by one.
+// Cards with a single valid target are auto-resolved; cards with multiple valid targets
+// set g.pending so the player can choose, then return — the next call continues.
+// When the queue is empty, advanceTurn is called if required.
+func (g *Game) processDeferredCards() {
+	g.inDeferred = true
+	defer func() { g.inDeferred = false }()
+
+	for len(g.deferredCards) > 0 {
+		dc := g.deferredCards[0]
+		g.deferredCards = g.deferredCards[1:]
+
+		p := g.deferredFor
+		if p == nil || p.Status != StatusActive || g.Phase != PhasePlaying {
+			continue
+		}
+
+		targets := g.validTargetsFor(dc)
+		switch len(targets) {
+		case 0:
+			g.logEvent("  %s (deferred) — no valid target, discarded", dc.Name)
+			g.Message = fmt.Sprintf("%s (deferred from Flip 3) — no valid target, discarded.", dc.Name)
+		case 1:
+			g.resolveActionWithTarget(p, dc, g.playerByID(targets[0]))
+		default:
+			// Require player choice — pause until Target() is called.
+			g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
+			g.Message = fmt.Sprintf("%s drew %s during Flip 3 — choose a target!", p.Name, dc.Name)
+			return
+		}
+	}
+
+	// All deferred cards resolved.
+	g.deferredCards = nil
+	g.deferredFor = nil
+	if g.deferredAdvance && g.Phase == PhasePlaying && !g.inDealing {
+		g.deferredAdvance = false
+		g.advanceTurn()
 	}
 }
 
@@ -328,7 +373,10 @@ func (g *Game) Target(sessionID, targetID string) error {
 	card := g.pending.Card
 	g.pending = nil
 	g.resolveActionWithTarget(drawer, card, target)
-	if g.inDealing {
+	if g.deferredFor != nil {
+		// Still processing deferred cards from a Flip 3 — continue the queue.
+		g.processDeferredCards()
+	} else if g.inDealing {
 		g.continueDealing()
 	}
 	return nil
@@ -353,6 +401,9 @@ func (g *Game) Restart(sessionID string) error {
 	g.UsedCards = nil
 	g.pending = nil
 	g.events = nil
+	g.deferredCards = nil
+	g.deferredFor = nil
+	g.deferredAdvance = false
 	g.Message = "Game reset — waiting for the host to start."
 	for _, p := range g.Players {
 		p.TotalScore = 0
@@ -634,7 +685,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.Message = fmt.Sprintf("%s used Freeze on %s — %s banks %d pts and exits!",
 				drawer.Name, target.Name, target.Name, target.RoundScore())
 		}
-		if !g.inDealing {
+		if !g.inDealing && !g.inDeferred {
 			g.advanceTurn()
 		}
 
@@ -666,14 +717,14 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 				break
 			}
 		}
-		// Resolve any action cards deferred during the Flip 3 draw.
-		for _, dc := range deferred {
-			if target.Status == StatusActive && g.Phase == PhasePlaying {
-				g.resolveActionAuto(target, dc)
-			}
-		}
-		// After Flip 3 resolves, the drawer's turn ends — pass to next player.
-		if g.Phase == PhasePlaying && !g.inDealing {
+		// Resolve action cards drawn during the Flip 3 interactively when possible.
+		if len(deferred) > 0 && target.Status == StatusActive && g.Phase == PhasePlaying {
+			g.deferredCards = deferred
+			g.deferredFor = target
+			g.deferredAdvance = !g.inDealing
+			g.processDeferredCards()
+			// processDeferredCards calls advanceTurn when all cards are resolved.
+		} else if g.Phase == PhasePlaying && !g.inDealing && !g.inDeferred {
 			g.advanceTurn()
 		}
 
@@ -687,7 +738,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.logEvent("%s gave 2nd Chance to %s", drawer.Name, target.Name)
 			g.Message = fmt.Sprintf("%s gave Second Chance to %s!", drawer.Name, target.Name)
 		}
-		if !g.inDealing {
+		if !g.inDealing && !g.inDeferred {
 			g.advanceTurn()
 		}
 	}
@@ -747,18 +798,22 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 	switch card.Type {
 
 	case CardTypeFreeze:
-		// Auto-target: first active player other than target.
+		// Auto-target: next active player (including the Flip3 victim as a last resort).
 		targetIdx := g.indexOfPlayer(target)
 		nextIdx := g.nextActiveFromExcluding(targetIdx, target)
 		if nextIdx < 0 {
-			target.Cards = append(target.Cards, card)
-			g.Message = "Freeze (deferred) — no other active player to freeze."
-		} else {
+			// No other active player — target freezes themselves.
+			nextIdx = targetIdx
+		}
+		if g.Players[nextIdx].Status == StatusActive {
 			g.Players[nextIdx].Cards = append(g.Players[nextIdx].Cards, card)
 			g.Players[nextIdx].Status = StatusFrozen
 			g.logEvent("  Freeze (auto) → %s banks %d pts", g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
 			g.Message = fmt.Sprintf("Freeze (deferred) — %s banks %d pts and exits!",
 				g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
+		} else {
+			target.Cards = append(target.Cards, card)
+			g.Message = "Freeze (deferred) — no active player to freeze."
 		}
 
 	case CardTypeFlip3:
