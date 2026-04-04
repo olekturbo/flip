@@ -576,7 +576,7 @@ func (g *Game) dealCardTo(p *Player) {
 		} else {
 			p.Cards = append(p.Cards, card)
 		}
-	case CardTypeModifierAdd, CardTypeModifierMul:
+	case CardTypeModifierAdd, CardTypeModifierMul, CardTypeModifierSub, CardTypeModifierDiv:
 		p.Cards = append(p.Cards, card)
 	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance:
 		targets := g.validTargetsFor(card)
@@ -649,7 +649,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 			}
 		}
 
-	case CardTypeModifierAdd, CardTypeModifierMul:
+	case CardTypeModifierAdd, CardTypeModifierMul, CardTypeModifierSub, CardTypeModifierDiv:
 		p.Cards = append(p.Cards, card)
 		g.logEvent("%s drew %s", p.Name, card.Name)
 		g.Message = fmt.Sprintf("%s drew %s.", p.Name, card.Name)
@@ -789,7 +789,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 			return nil, true
 		}
 
-	case CardTypeModifierAdd, CardTypeModifierMul:
+	case CardTypeModifierAdd, CardTypeModifierMul, CardTypeModifierSub, CardTypeModifierDiv:
 		p.Cards = append(p.Cards, card)
 		g.logEvent("  %s drew %s (Flip 3)", p.Name, card.Name)
 		g.Message = fmt.Sprintf("%s drew %s (Flip 3).", p.Name, card.Name)
