@@ -66,14 +66,22 @@
   <!-- Main game UI (always visible once connected) -->
   <header id="game-header">
     <span class="header-logo">Flip 7</span>
-    <span class="header-stat">Room: <span id="hdr-room-id">—</span></span>
+    <span class="header-stat">Room: <span id="hdr-room-id">—</span><button class="btn-copy-inline" id="btn-copy-link" onclick="copyLink()" title="Copy room link">⧉</button></span>
     <span class="header-stat">Round: <span id="hdr-round">—</span></span>
     <span class="header-stat">Deck: <span id="hdr-deck">—</span></span>
-    <button class="btn btn-secondary btn-copy-link" id="btn-copy-link" onclick="copyLink()">Copy Link</button>
     <button class="btn btn-secondary" onclick="show('rules-modal')" style="margin-left:auto">Rules</button>
   </header>
 
   <div id="message-bar">Connecting...</div>
+
+  <div id="deck-area">
+    <div id="deck-pile" class="deck-pile" title="Draw pile">
+      <div class="deck-layer deck-layer-3"></div>
+      <div class="deck-layer deck-layer-2"></div>
+      <div class="deck-layer deck-layer-1"></div>
+    </div>
+    <span id="deck-pile-count" class="deck-pile-count">— cards</span>
+  </div>
 
   <div id="players-grid"></div>
 
@@ -93,6 +101,15 @@
     <span id="countdown" class="hidden"></span>
     <!-- Shown to non-drawer players while target is being chosen -->
     <p id="targeting-waiting" class="hidden targeting-waiting"></p>
+  </div>
+
+  <!-- Event log (bottom-right) -->
+  <div id="event-log" class="hidden">
+    <div id="event-log-header">
+      <span>Log</span>
+      <button id="event-log-toggle" onclick="toggleEventLog()" title="Collapse">−</button>
+    </div>
+    <div id="event-log-body"></div>
   </div>
 
   <div id="conn-status" class="conn-warn">Connecting...</div>

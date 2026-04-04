@@ -14,3 +14,5 @@ Check every section:
 9. **Deck persistence** — deck carries between rounds, reshuffled only when empty (startRound logic)
 
 After updating, confirm which sections were changed (or say "all sections already in sync" if nothing needed updating).
+
+After updating `web/game.html`, also update `RULES.md` in the repository root to match. Keep RULES.md in sync with the HTML rules modal: same sections, same wording.

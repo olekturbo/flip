@@ -6,9 +6,12 @@ let sessionID   = localStorage.getItem('flip7_session_' + roomID) || '';
 let playerName  = localStorage.getItem('flip7_name') || '';
 let playerID    = '';
 let isHost      = false;
-let gameState   = null;
-let ws          = null;
-let reconnectDelay = 1000;
+let gameState        = null;
+let prevPlayers      = [];   // previous player states for animation diffs
+let ws               = null;
+let reconnectDelay   = 1000;
+let overlayTimer     = null; // delayed round-end / game-over overlay
+let shownOverlayPhase = null; // which phase the overlay was already shown for
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 if (!roomID) {
@@ -97,15 +100,58 @@ function handleMessage(msg) {
 function render() {
   if (!gameState) return;
 
+  // Detect new cards before rendering (for animation)
+  const newCardOwners = [];
+  gameState.players.forEach(p => {
+    const prev = prevPlayers.find(pp => pp.id === p.id);
+    const prevCount = prev ? prev.cards.length : 0;
+    if (p.cards.length > prevCount) {
+      newCardOwners.push({ id: p.id, count: p.cards.length - prevCount });
+    }
+  });
+
   // Header stats
   el('hdr-round').textContent = gameState.roundNumber || '—';
-  el('hdr-deck').textContent  = gameState.deckSize   !== undefined ? gameState.deckSize : '—';
+  el('hdr-deck').textContent  = gameState.deckSize !== undefined ? gameState.deckSize : '—';
+
+  // Deck pile count
+  const deckCountEl = el('deck-pile-count');
+  if (deckCountEl) deckCountEl.textContent = (gameState.deckSize || 0) + ' cards';
 
   // Message bar
   el('message-bar').textContent = gameState.message || '';
 
+  // Event log
+  updateEventLog(gameState.events);
+
   // Players grid (always rendered)
   renderPlayersGrid();
+
+  // Trigger animations for players who got new cards
+  newCardOwners.forEach(({ id, count }) => {
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => flyCardFromDeck(id), i * 120);
+    }
+    // Animate the last card(s) in the player's panel
+    setTimeout(() => {
+      const panel = document.querySelector(`[data-player-id="${id}"]`);
+      if (!panel) return;
+      const cards = panel.querySelectorAll('.card:not(.card-bust-marker)');
+      // Animate newly added cards
+      const total = gameState.players.find(p => p.id === id)?.cards.length || 0;
+      const prev = prevPlayers.find(pp => pp.id === id);
+      const prevCount = prev ? prev.cards.length : 0;
+      const newCount = total - prevCount;
+      for (let j = Math.max(0, cards.length - newCount); j < cards.length; j++) {
+        const c = cards[j];
+        c.classList.add('card-new');
+        c.addEventListener('animationend', () => c.classList.remove('card-new'), { once: true });
+      }
+    }, count * 120 + 20);
+  });
+
+  // Save state for next diff
+  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards] }));
 
   // Phase-specific UI
   hideAllOverlays();
@@ -114,11 +160,67 @@ function render() {
   hide('targeting-overlay'); hide('targeting-waiting');
 
   switch (gameState.phase) {
-    case 'lobby':     renderLobby();    break;
-    case 'playing':   renderPlaying();  break;
-    case 'round_end': renderRoundEnd(); break;
-    case 'game_over': renderGameOver(); break;
+    case 'lobby':   renderLobby();   break;
+    case 'playing': {
+      // If we were waiting to show an overlay, cancel it — round resumed
+      if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
+      shownOverlayPhase = null;
+      renderPlaying();
+      break;
+    }
+    case 'round_end':
+    case 'game_over': {
+      const phase = gameState.phase;
+      const render = phase === 'round_end' ? renderRoundEnd : renderGameOver;
+      if (shownOverlayPhase === phase) {
+        // Already shown — just refresh content (e.g. countdown tick)
+        render();
+      } else {
+        // First time entering this phase — delay 1 s so the final action is visible
+        if (overlayTimer) clearTimeout(overlayTimer);
+        overlayTimer = setTimeout(() => {
+          overlayTimer = null;
+          shownOverlayPhase = phase;
+          render();
+        }, 1000);
+      }
+      break;
+    }
   }
+}
+
+// ── Deck animation ────────────────────────────────────────────────────────────
+function flyCardFromDeck(targetPlayerID) {
+  const deckEl = el('deck-pile');
+  const panel  = document.querySelector(`[data-player-id="${targetPlayerID}"]`);
+  if (!deckEl || !panel) return;
+
+  const deckRect  = deckEl.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+
+  const card = document.createElement('div');
+  card.className = 'card card-flying';
+  card.style.cssText = `
+    position: fixed;
+    width: 38px;
+    height: 52px;
+    left: ${deckRect.left + deckRect.width / 2 - 19}px;
+    top:  ${deckRect.top  + deckRect.height / 2 - 26}px;
+    z-index: 1000;
+    pointer-events: none;
+    border-radius: 5px;
+  `;
+  document.body.appendChild(card);
+
+  const endX = panelRect.left + panelRect.width  / 2 - 19;
+  const endY = panelRect.top  + panelRect.height / 2 - 26;
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    card.style.left    = `${endX}px`;
+    card.style.top     = `${endY}px`;
+    card.style.opacity = '0';
+    setTimeout(() => card.remove(), 420);
+  }));
 }
 
 // ── Lobby ─────────────────────────────────────────────────────────────────────
@@ -151,13 +253,13 @@ function renderLobby() {
 
 // ── Playing ───────────────────────────────────────────────────────────────────
 function renderPlaying() {
-  const cp     = gameState.players[gameState.currentPlayerIndex];
+  const cpIdx  = gameState.currentPlayerIndex;
+  const cp     = cpIdx >= 0 ? gameState.players[cpIdx] : null;
   const myTurn = cp && cp.id === playerID;
   const pa     = gameState.pendingAction;
 
   if (pa) {
     if (pa.drawerID === playerID) {
-      // I drew the action card — show target picker overlay.
       const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
       el('targeting-card-name').textContent = `You drew: ${cardLabel}`;
@@ -168,7 +270,6 @@ function renderPlaying() {
       }).join('');
       show('targeting-overlay');
     } else {
-      // Someone else is choosing — show waiting notice.
       const drawer = gameState.players.find(p => p.id === pa.drawerID);
       el('targeting-waiting').textContent =
         `Waiting for ${drawer ? esc(drawer.name) : 'a player'} to choose a target…`;
@@ -263,9 +364,9 @@ function renderPlayerPanel(p, i) {
   }[p.status] || p.status;
 
   const cards = (p.cards || []).map((c, ci) => {
-    // Highlight the last card red if the player busted
     const isBustCard = p.status === 'busted' && ci === p.cards.length - 1;
-    return `<div class="card card-${c.type}${isBustCard ? ' card-bust-marker' : ''}" title="${esc(c.name)}">${esc(c.name)}</div>`;
+    const numClass = c.type === 'number' ? ` card-n-${c.value}` : '';
+    return `<div class="card card-${c.type}${numClass}${isBustCard ? ' card-bust-marker' : ''}" title="${esc(c.name)}">${esc(c.name)}</div>`;
   }).join('');
 
   const scIcon = p.hasSecondChance
@@ -277,7 +378,7 @@ function renderPlayerPanel(p, i) {
     : '';
 
   return `
-    <div class="player-panel ${p.status} ${isCurrent ? 'current-turn' : ''}">
+    <div class="player-panel ${p.status} ${isCurrent ? 'current-turn' : ''}" data-player-id="${p.id}">
       <div class="player-header">
         <span class="player-name">${esc(p.name)}</span>
         ${isYou  ? '<span class="player-you-badge">YOU</span>'  : ''}
@@ -294,6 +395,55 @@ function renderPlayerPanel(p, i) {
       <div class="player-cards">${cards || '<span style="color:var(--text-dim);font-size:0.8rem">No cards</span>'}</div>
     </div>
   `;
+}
+
+// ── Event log ─────────────────────────────────────────────────────────────────
+let eventLogCollapsed = true;
+
+function updateEventLog(events) {
+  if (!events || events.length === 0) return;
+  const logEl  = el('event-log');
+  const body   = el('event-log-body');
+  if (!logEl || !body) return;
+
+  // Show the panel once there are events
+  logEl.classList.remove('hidden');
+
+  // Apply collapsed state on first show
+  const body2 = el('event-log-body');
+  const toggle2 = el('event-log-toggle');
+  if (body2 && body2.dataset.len === undefined) {
+    body2.style.display = eventLogCollapsed ? 'none' : '';
+    if (toggle2) toggle2.textContent = eventLogCollapsed ? '+' : '−';
+  }
+
+  // Only re-render if content changed
+  const newLen = events.length;
+  if (body.dataset.len === String(newLen)) return;
+  body.dataset.len = newLen;
+
+  body.innerHTML = events.map(e => {
+    let cls = 'ev';
+    if (e.startsWith('──'))                                     cls += ' ev-round';
+    else if (e.includes('BUSTED'))                              cls += ' ev-bust';
+    else if (e.includes('FLIP 7'))                              cls += ' ev-flip7';
+    else if (e.includes('stopped'))                             cls += ' ev-stop';
+    else if (e.includes('Freeze') || e.includes('Flip 3') ||
+             e.includes('2nd Chance') || e.includes('froze'))  cls += ' ev-action';
+    else if (e.startsWith('  '))                                cls += ' ev-sub';
+    return `<div class="${cls}">${esc(e.trim())}</div>`;
+  }).join('');
+
+  // Auto-scroll to bottom
+  body.scrollTop = body.scrollHeight;
+}
+
+function toggleEventLog() {
+  eventLogCollapsed = !eventLogCollapsed;
+  const body   = el('event-log-body');
+  const toggle = el('event-log-toggle');
+  if (body)   body.style.display   = eventLogCollapsed ? 'none' : '';
+  if (toggle) toggle.textContent   = eventLogCollapsed ? '+' : '−';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -328,7 +478,7 @@ function copyLink() {
   navigator.clipboard.writeText(window.location.href).then(() => {
     const btn = el('btn-copy-link');
     const prev = btn.textContent;
-    btn.textContent = 'Copied!';
+    btn.textContent = '✓';
     setTimeout(() => { btn.textContent = prev; }, 1500);
   });
 }

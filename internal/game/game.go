@@ -50,6 +50,7 @@ type GameState struct {
 	PendingAction      *PendingActionState `json:"pendingAction,omitempty"`
 	WinnerIDs          []string            `json:"winnerIDs,omitempty"` // one or more in case of a tie
 	NextRoundIn        int                 `json:"nextRoundIn,omitempty"`
+	Events             []string            `json:"events"`
 }
 
 // PlayerView is the serialisable projection of a Player.
@@ -81,6 +82,17 @@ type Game struct {
 	Message      string
 	Winners      []*Player // one or more players (tie is possible)
 	roundEndedAt time.Time
+	dealingQueue []int // player indices still to receive initial card
+	inDealing    bool  // true while initial deal is in progress
+	events       []string
+}
+
+// logEvent appends a message to the event history (capped at 80 entries).
+func (g *Game) logEvent(format string, args ...interface{}) {
+	g.events = append(g.events, fmt.Sprintf(format, args...))
+	if len(g.events) > 80 {
+		g.events = g.events[len(g.events)-80:]
+	}
 }
 
 // New creates an empty game for the given room ID.
@@ -192,6 +204,7 @@ func (g *Game) TickInactive() bool {
 
 	cp = g.currentPlayer()
 	if cp != nil && cp.Status == StatusInactive && g.pending == nil {
+		g.logEvent("%s is inactive — turn skipped", cp.Name)
 		g.Message = fmt.Sprintf("%s is inactive — turn skipped.", cp.Name)
 		g.advanceTurn()
 		changed = true
@@ -273,6 +286,7 @@ func (g *Game) Stop(sessionID string) error {
 		return fmt.Errorf("you cannot stop right now")
 	}
 	cp.Status = StatusStopped
+	g.logEvent("%s stopped — %d pts", cp.Name, cp.RoundScore())
 	g.Message = fmt.Sprintf("%s stopped with %d round points.", cp.Name, cp.RoundScore())
 	g.advanceTurn()
 	return nil
@@ -314,6 +328,9 @@ func (g *Game) Target(sessionID, targetID string) error {
 	card := g.pending.Card
 	g.pending = nil
 	g.resolveActionWithTarget(drawer, card, target)
+	if g.inDealing {
+		g.continueDealing()
+	}
 	return nil
 }
 
@@ -335,6 +352,7 @@ func (g *Game) Restart(sessionID string) error {
 	g.Deck = nil
 	g.UsedCards = nil
 	g.pending = nil
+	g.events = nil
 	g.Message = "Game reset — waiting for the host to start."
 	for _, p := range g.Players {
 		p.TotalScore = 0
@@ -390,6 +408,9 @@ func (g *Game) State() GameState {
 		}
 	}
 
+	events := make([]string, len(g.events))
+	copy(events, g.events)
+
 	return GameState{
 		Phase:              g.Phase,
 		RoundNumber:        g.RoundNumber,
@@ -400,6 +421,7 @@ func (g *Game) State() GameState {
 		PendingAction:      pendingState,
 		WinnerIDs:          winnerIDs,
 		NextRoundIn:        nextRoundIn,
+		Events:             events,
 	}
 }
 
@@ -431,17 +453,44 @@ func (g *Game) startRound() {
 		g.DealerIndex = (g.DealerIndex + 1) % len(g.Players)
 	}
 
-	// Deal one starting card to each player, starting left of dealer.
+	g.CurrentIndex = -1
+	g.inDealing = true
+
 	n := len(g.Players)
+	g.dealingQueue = make([]int, 0, n)
 	for i := 0; i < n; i++ {
 		idx := (g.DealerIndex + 1 + i) % n
+		if g.Players[idx].Status != StatusInactive {
+			g.dealingQueue = append(g.dealingQueue, idx)
+		}
+	}
+
+	g.logEvent("── Round %d ──", g.RoundNumber)
+	g.Message = fmt.Sprintf("Round %d — dealing initial cards...", g.RoundNumber)
+	g.continueDealing()
+}
+
+func (g *Game) continueDealing() {
+	for len(g.dealingQueue) > 0 && g.Phase == PhasePlaying {
+		idx := g.dealingQueue[0]
+		g.dealingQueue = g.dealingQueue[1:]
 		p := g.Players[idx]
-		if p.Status == StatusInactive {
+		if p.Status != StatusActive {
 			continue
 		}
 		g.dealCardTo(p)
+		if g.pending != nil {
+			return // waiting for player input
+		}
 	}
+	g.dealingQueue = nil
+	g.inDealing = false
+	if g.Phase == PhasePlaying {
+		g.finishDealing()
+	}
+}
 
+func (g *Game) finishDealing() {
 	g.CurrentIndex = g.nextActiveFrom(g.DealerIndex)
 	if g.CurrentIndex < 0 {
 		g.Phase = PhaseRoundEnd
@@ -469,16 +518,16 @@ func (g *Game) dealCardTo(p *Player) {
 		}
 	case CardTypeModifierAdd, CardTypeModifierMul:
 		p.Cards = append(p.Cards, card)
-	case CardTypeSecondChance:
-		p.Cards = append(p.Cards, card)
-		p.HasSecondChance = true
-	case CardTypeFreeze:
-		p.Cards = append(p.Cards, card)
-		p.Status = StatusFrozen
-	case CardTypeFlip3:
-		p.Cards = append(p.Cards, card)
-		for i := 0; i < 3 && len(g.Deck)+len(g.UsedCards) > 0 && p.Status == StatusActive; i++ {
-			g.dealCardTo(p)
+	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance:
+		targets := g.validTargetsFor(card)
+		switch len(targets) {
+		case 0:
+			g.Message = fmt.Sprintf("%s was dealt %s — no valid target, discarded.", p.Name, card.Name)
+		case 1:
+			g.resolveActionWithTarget(p, card, g.playerByID(targets[0]))
+		default:
+			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
+			g.Message = fmt.Sprintf("%s was dealt %s — choose a target!", p.Name, card.Name)
 		}
 	}
 }
@@ -519,16 +568,19 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
+				g.logEvent("%s survived bust with 2nd Chance (drew %d)", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Turn ends.", p.Name, card.Value)
 				g.advanceTurn()
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
+				g.logEvent("%s BUSTED — duplicate %d", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s drew %d — BUSTED! All round points lost.", p.Name, card.Value)
 				g.advanceTurn()
 			}
 		} else {
 			p.Cards = append(p.Cards, card)
+			g.logEvent("%s drew %d", p.Name, card.Value)
 			g.Message = fmt.Sprintf("%s drew %d.", p.Name, card.Value)
 			if p.UniqueNumberCount() == 7 {
 				g.triggerFlip7(p)
@@ -539,6 +591,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 
 	case CardTypeModifierAdd, CardTypeModifierMul:
 		p.Cards = append(p.Cards, card)
+		g.logEvent("%s drew %s", p.Name, card.Name)
 		g.Message = fmt.Sprintf("%s drew %s.", p.Name, card.Name)
 		g.advanceTurn() // one card per turn — pass to next player
 
@@ -551,6 +604,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		switch len(targets) {
 		case 0:
 			// No valid target (e.g. all active players already hold Second Chance).
+			g.logEvent("%s drew %s — no valid target, discarded", p.Name, card.Name)
 			g.Message = fmt.Sprintf("%s drew %s — no valid target, discarded.", p.Name, card.Name)
 			g.advanceTurn()
 		case 1:
@@ -570,22 +624,36 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 	switch card.Type {
 
 	case CardTypeFreeze:
-		drawer.Cards = append(drawer.Cards, card)
+		target.Cards = append(target.Cards, card)
 		target.Status = StatusFrozen
 		if target == drawer {
+			g.logEvent("%s froze themselves — %d pts banked", drawer.Name, drawer.RoundScore())
 			g.Message = fmt.Sprintf("%s froze themselves — banks %d pts!", drawer.Name, drawer.RoundScore())
 		} else {
+			g.logEvent("%s froze %s — %s banks %d pts", drawer.Name, target.Name, target.Name, target.RoundScore())
 			g.Message = fmt.Sprintf("%s used Freeze on %s — %s banks %d pts and exits!",
 				drawer.Name, target.Name, target.Name, target.RoundScore())
 		}
-		g.advanceTurn()
+		if !g.inDealing {
+			g.advanceTurn()
+		}
 
 	case CardTypeFlip3:
-		drawer.Cards = append(drawer.Cards, card)
+		target.Cards = append(target.Cards, card)
 		if target == drawer {
+			g.logEvent("%s Flip 3 — drawing 3 cards", drawer.Name)
 			g.Message = fmt.Sprintf("%s drew Flip 3 — drawing 3 cards!", drawer.Name)
 		} else {
+			g.logEvent("%s → Flip 3 → %s draws 3 cards", drawer.Name, target.Name)
 			g.Message = fmt.Sprintf("%s used Flip 3 on %s — %s draws 3 cards!", drawer.Name, target.Name, target.Name)
+		}
+		if g.inDealing {
+			for i, qIdx := range g.dealingQueue {
+				if g.Players[qIdx] == target {
+					g.dealingQueue = append(g.dealingQueue[:i], g.dealingQueue[i+1:]...)
+					break
+				}
+			}
 		}
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
@@ -605,7 +673,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			}
 		}
 		// After Flip 3 resolves, the drawer's turn ends — pass to next player.
-		if g.Phase == PhasePlaying {
+		if g.Phase == PhasePlaying && !g.inDealing {
 			g.advanceTurn()
 		}
 
@@ -613,11 +681,15 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		target.Cards = append(target.Cards, card)
 		target.HasSecondChance = true
 		if target == drawer {
+			g.logEvent("%s drew 2nd Chance", drawer.Name)
 			g.Message = fmt.Sprintf("%s drew Second Chance — one bust blocked!", drawer.Name)
 		} else {
+			g.logEvent("%s gave 2nd Chance to %s", drawer.Name, target.Name)
 			g.Message = fmt.Sprintf("%s gave Second Chance to %s!", drawer.Name, target.Name)
 		}
-		g.advanceTurn()
+		if !g.inDealing {
+			g.advanceTurn()
+		}
 	}
 }
 
@@ -639,15 +711,18 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
+				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d)", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draw ends.", p.Name, card.Value)
 				return nil, true
 			}
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted
+			g.logEvent("  %s BUSTED in Flip 3 — duplicate %d", p.Name, card.Value)
 			g.Message = fmt.Sprintf("%s drew %d during Flip 3 — BUSTED!", p.Name, card.Value)
 			return nil, true
 		}
 		p.Cards = append(p.Cards, card)
+		g.logEvent("  %s drew %d (Flip 3)", p.Name, card.Value)
 		g.Message = fmt.Sprintf("%s drew %d (Flip 3).", p.Name, card.Value)
 		if p.UniqueNumberCount() == 7 {
 			g.triggerFlip7(p)
@@ -656,6 +731,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 
 	case CardTypeModifierAdd, CardTypeModifierMul:
 		p.Cards = append(p.Cards, card)
+		g.logEvent("  %s drew %s (Flip 3)", p.Name, card.Name)
 		g.Message = fmt.Sprintf("%s drew %s (Flip 3).", p.Name, card.Name)
 
 	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance:
@@ -671,20 +747,23 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 	switch card.Type {
 
 	case CardTypeFreeze:
-		target.Cards = append(target.Cards, card)
 		// Auto-target: first active player other than target.
 		targetIdx := g.indexOfPlayer(target)
 		nextIdx := g.nextActiveFromExcluding(targetIdx, target)
 		if nextIdx < 0 {
-			g.Message = fmt.Sprintf("Freeze (deferred) — no other active player to freeze.")
+			target.Cards = append(target.Cards, card)
+			g.Message = "Freeze (deferred) — no other active player to freeze."
 		} else {
+			g.Players[nextIdx].Cards = append(g.Players[nextIdx].Cards, card)
 			g.Players[nextIdx].Status = StatusFrozen
+			g.logEvent("  Freeze (auto) → %s banks %d pts", g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
 			g.Message = fmt.Sprintf("Freeze (deferred) — %s banks %d pts and exits!",
 				g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
 		}
 
 	case CardTypeFlip3:
 		target.Cards = append(target.Cards, card)
+		g.logEvent("  Flip 3 (auto) → %s draws 3 more cards", target.Name)
 		g.Message = fmt.Sprintf("Flip 3 (deferred) — %s draws 3 more cards!", target.Name)
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
@@ -742,6 +821,7 @@ func (g *Game) consumeSecondChance(p *Player) {
 
 // triggerFlip7 ends the round when p collects 7 unique number cards.
 func (g *Game) triggerFlip7(p *Player) {
+	g.logEvent("★ %s — FLIP 7! (+15 bonus)", p.Name)
 	for _, other := range g.Players {
 		if other != p && other.Status == StatusActive {
 			other.Status = StatusStopped
