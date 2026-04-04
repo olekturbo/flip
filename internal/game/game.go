@@ -60,6 +60,7 @@ type PlayerView struct {
 	Cards           []Card       `json:"cards"`
 	TotalScore      int          `json:"totalScore"`
 	RoundScore      int          `json:"roundScore"`
+	RoundBonus      int          `json:"roundBonus,omitempty"` // +15 for Flip 7 winner
 	Status          PlayerStatus `json:"status"`
 	HasSecondChance bool         `json:"hasSecondChance"`
 	IsHost          bool         `json:"isHost"`
@@ -80,8 +81,9 @@ type Game struct {
 	RoundNumber  int
 	DealerIndex  int // index of the current dealer; -1 before first round
 	Message      string
-	Winners      []*Player // one or more players (tie is possible)
-	roundEndedAt time.Time
+	Winners        []*Player // one or more players (tie is possible)
+	flip7WinnerID  string    // ID of the player who triggered Flip 7 this round (for display)
+	roundEndedAt   time.Time
 	dealingQueue   []int   // player indices still to receive initial card
 	inDealing      bool    // true while initial deal is in progress
 	deferredCards  []Card  // action cards queued for resolution after a Flip 3
@@ -400,6 +402,7 @@ func (g *Game) Restart(sessionID string) error {
 	g.Deck = nil
 	g.UsedCards = nil
 	g.pending = nil
+	g.flip7WinnerID = ""
 	g.events = nil
 	g.deferredCards = nil
 	g.deferredFor = nil
@@ -424,12 +427,17 @@ func (g *Game) State() GameState {
 		if p.Status == StatusBusted || p.Status == StatusInactive {
 			rs = 0
 		}
+		bonus := 0
+		if g.flip7WinnerID != "" && p.ID == g.flip7WinnerID {
+			bonus = 15
+		}
 		views[i] = PlayerView{
 			ID:              p.ID,
 			Name:            p.Name,
 			Cards:           p.Cards,
 			TotalScore:      p.TotalScore,
 			RoundScore:      rs,
+			RoundBonus:      bonus,
 			Status:          p.Status,
 			HasSecondChance: p.HasSecondChance,
 			IsHost:          p.IsHost,
@@ -483,6 +491,7 @@ func (g *Game) startRound() {
 	g.RoundNumber++
 	g.roundEndedAt = time.Time{}
 	g.pending = nil
+	g.flip7WinnerID = ""
 
 	// Return all cards from players' hands to the discard pile before reset.
 	for _, p := range g.Players {
@@ -901,6 +910,11 @@ func (g *Game) endRound(flip7Winner *Player) {
 	g.Phase = PhaseRoundEnd
 	g.roundEndedAt = time.Now()
 	g.pending = nil
+	if flip7Winner != nil {
+		g.flip7WinnerID = flip7Winner.ID
+	} else {
+		g.flip7WinnerID = ""
+	}
 
 	parts := make([]string, 0, len(g.Players))
 	for _, p := range g.Players {

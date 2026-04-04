@@ -437,15 +437,24 @@ function renderRoundEnd() {
   el('round-end-title').textContent = `Round ${gameState.roundNumber} Over`;
 
   const tbody = el('round-score-body');
-  tbody.innerHTML = gameState.players.map(p => `
+  tbody.innerHTML = gameState.players.map(p => {
+    let scoreCell;
+    if (p.status === 'busted') {
+      scoreCell = `<span style="color:var(--red)">BUSTED</span>`;
+    } else {
+      const base  = `+${p.roundScore}`;
+      const bonus = p.roundBonus
+        ? `<span class="flip7-bonus-tag">+${p.roundBonus} 🎉</span>`
+        : '';
+      scoreCell = `<span style="color:var(--gold-light)">${base}</span>${bonus}`;
+    }
+    return `
     <tr>
       <td>${esc(p.name)}${p.id === playerID ? ' (you)' : ''}</td>
-      <td style="color:${p.status === 'busted' ? 'var(--red)' : 'var(--gold-light)'}">
-        ${p.status === 'busted' ? 'BUSTED' : '+' + p.roundScore}
-      </td>
+      <td>${scoreCell}</td>
       <td>${p.totalScore}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
   if (gameState.nextRoundIn > 0) {
     el('round-end-countdown').textContent =
@@ -532,7 +541,7 @@ function renderPlayerPanel(p, i) {
       <div class="player-scores">
         Total: <strong>${p.totalScore}</strong>
         &nbsp;|&nbsp;
-        Round: <strong>${p.roundScore}</strong>
+        Round: <strong>${p.roundScore}</strong>${p.roundBonus ? ` <span class="flip7-bonus-tag">+${p.roundBonus} 🎉</span>` : ''}
       </div>
       ${disconnected}
       <div class="player-cards">${cards || '<span style="color:var(--text-dim);font-size:0.8rem">No cards</span>'}</div>

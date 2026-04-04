@@ -291,6 +291,20 @@ input[type="text"]:focus { border-color: var(--gold); }
   color: #f97316;
 }
 
+/* Flip 7 bonus tag (+15 🎉) */
+.flip7-bonus-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  background: #78350f;
+  color: var(--gold-light);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 3px;
+}
+
 /* Second Chance indicator */
 .second-chance-indicator {
   display: inline-block;
