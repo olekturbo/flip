@@ -176,6 +176,19 @@ function render() {
         }, 80);
       }
     }
+
+    // Second Chance consumed: hasSecondChance flipped true→false while still active
+    if (prev && prev.hasSecondChance && !p.hasSecondChance && p.status === 'active') {
+      const pid = p.id, pname = p.name;
+      showActionBanner(`🛡️ ${pname} — 2nd Chance saved the bust!`, 'rgba(5,120,80,0.95)');
+      setTimeout(() => {
+        const panel = document.querySelector(`[data-player-id="${pid}"]`);
+        if (panel) {
+          panel.classList.add('just-second-chance');
+          panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
+        }
+      }, 80);
+    }
   });
 
   // ── 2. Static UI updates ───────────────────────────────────────────────────
@@ -210,7 +223,7 @@ function render() {
   });
 
   // ── 5. Persist snapshot (includes status for next diff) ───────────────────
-  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status }));
+  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance }));
 
   // Phase-specific UI
   hideAllOverlays();
