@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flip 7</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="game-page">
+
+  <!-- Name entry modal (shown before first connection) -->
+  <div id="name-modal" class="hidden">
+    <div class="name-modal-box">
+      <h2>Enter your name</h2>
+      <input id="name-input" type="text" placeholder="Your name..." maxlength="20"
+             onkeydown="if(event.key==='Enter') submitName()">
+      <button class="btn btn-primary" onclick="submitName()">Join Game</button>
+    </div>
+  </div>
+
+  <!-- Lobby overlay (waiting for game to start) -->
+  <div id="lobby-overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <h2>Waiting for players</h2>
+      <div>
+        <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:0.5rem">Share this link:</p>
+        <input id="share-url" type="text" readonly onclick="this.select()"
+               style="background:rgba(0,0,0,0.4);cursor:pointer;font-size:0.82rem">
+      </div>
+      <h3>Players in room</h3>
+      <ul id="lobby-player-list" class="player-list"></ul>
+      <button id="btn-start" class="btn btn-primary btn-large hidden" onclick="sendAction('start')">
+        Start Game
+      </button>
+      <p id="lobby-hint" class="text-center" style="font-size:0.82rem;color:var(--text-dim)"></p>
+    </div>
+  </div>
+
+  <!-- Round end overlay -->
+  <div id="round-end-overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <h2 id="round-end-title">Round Over</h2>
+      <table class="score-table" id="round-score-table">
+        <thead><tr><th>Player</th><th>This Round</th><th>Total</th></tr></thead>
+        <tbody id="round-score-body"></tbody>
+      </table>
+      <p id="round-end-countdown" class="text-center" style="color:var(--text-dim);font-size:0.88rem"></p>
+    </div>
+  </div>
+
+  <!-- Game over overlay -->
+  <div id="game-over-overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <h2>Game Over!</h2>
+      <p id="winner-announcement" style="font-size:1.1rem;color:var(--gold-light)"></p>
+      <table class="score-table" id="final-score-table">
+        <thead><tr><th>Player</th><th>Final Score</th></tr></thead>
+        <tbody id="final-score-body"></tbody>
+      </table>
+      <button id="btn-restart" class="btn btn-primary hidden" onclick="sendAction('restart')">
+        Play Again
+      </button>
+    </div>
+  </div>
+
+  <!-- Main game UI (always visible once connected) -->
+  <header id="game-header">
+    <span class="header-logo">Flip 7</span>
+    <span class="header-stat">Room: <span id="hdr-room-id">—</span></span>
+    <span class="header-stat">Round: <span id="hdr-round">—</span></span>
+    <span class="header-stat">Deck: <span id="hdr-deck">—</span></span>
+    <button class="btn btn-secondary btn-copy-link" id="btn-copy-link" onclick="copyLink()">Copy Link</button>
+    <button class="btn btn-secondary" onclick="show('rules-modal')" style="margin-left:auto">Rules</button>
+  </header>
+
+  <div id="message-bar">Connecting...</div>
+
+  <div id="players-grid"></div>
+
+  <!-- Target selection overlay — shown to the drawer of an action card -->
+  <div id="targeting-overlay" class="targeting-overlay hidden">
+    <div class="targeting-box">
+      <p id="targeting-card-name" class="targeting-card-name"></p>
+      <p id="targeting-prompt" class="targeting-prompt">Choose a target:</p>
+      <div id="targeting-buttons" class="targeting-buttons"></div>
+    </div>
+  </div>
+
+  <div id="action-area">
+    <span id="your-turn-label" class="hidden">Your turn!</span>
+    <button id="btn-draw" class="btn btn-primary hidden" onclick="sendAction('draw')">Draw Card</button>
+    <button id="btn-stop" class="btn btn-secondary hidden" onclick="sendAction('stop')">Stop</button>
+    <span id="countdown" class="hidden"></span>
+    <!-- Shown to non-drawer players while target is being chosen -->
+    <p id="targeting-waiting" class="hidden targeting-waiting"></p>
+  </div>
+
+  <div id="conn-status" class="conn-warn">Connecting...</div>
+
+  <!-- Rules modal -->
+  <div id="rules-modal" class="rules-backdrop hidden" onclick="if(event.target===this)hide('rules-modal')">
+    <div class="rules-box">
+      <button class="rules-close" onclick="hide('rules-modal')" title="Close">✕</button>
+      <h2 class="rules-title">How to Play — Flip 7</h2>
+
+      <section>
+        <h3>Goal</h3>
+        <p>Be the first player to reach <strong>200 points</strong> across multiple rounds.</p>
+      </section>
+
+      <section>
+        <h3>Deck — 94 cards</h3>
+        <ul>
+          <li><strong>Number cards (79):</strong> values 0–12; card N appears N times (0 appears once).</li>
+          <li><strong>Action cards (9):</strong> 3× Freeze, 3× Flip 3, 3× Second Chance.</li>
+          <li><strong>Modifier cards (6):</strong> +2, +4, +6, +8, +10, ×2.</li>
+        </ul>
+        <p class="rules-note">The deck is <em>not</em> reshuffled between rounds — it carries over. It's only reshuffled when it runs out.</p>
+      </section>
+
+      <section>
+        <h3>Each Round</h3>
+        <ol>
+          <li>The dealer deals <strong>one card face-up</strong> to every player (starting left of dealer). Action cards resolve immediately during dealing.</li>
+          <li>Play passes left of the dealer. On your turn you have two options:
+            <ul>
+              <li><strong>Draw</strong> — take <em>one</em> card from the deck, then the turn passes to the next player.</li>
+              <li><strong>Stay</strong> — bank your current points and exit the round (you keep your score).</li>
+            </ul>
+          </li>
+          <li>Number cards build your hand. Modifier and Action cards are placed above the line.</li>
+          <li>After all players have either Stayed, been Frozen, or busted the round ends.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h3>Busting</h3>
+        <p>Drawing a number you <strong>already have</strong> = bust. You score <strong>0</strong> this round.</p>
+        <p class="rules-note">Only duplicate number cards cause a bust — action and modifier cards never do.</p>
+      </section>
+
+      <section>
+        <h3>Action Cards</h3>
+        <p>When you draw one, you <strong>choose any active player</strong> to receive its effect (including yourself). If you're the only active player, it targets you automatically.</p>
+        <div class="rules-cards">
+          <div class="rules-card-row">
+            <span class="card card-freeze">Freeze</span>
+            <span>Chosen player <strong>banks their points and exits</strong> the round immediately.</span>
+          </div>
+          <div class="rules-card-row">
+            <span class="card card-flip3">Flip 3</span>
+            <span>Chosen player must <strong>draw 3 cards</strong> one at a time (stops early only on bust or Flip 7). Action cards drawn during Flip 3 resolve after all 3.</span>
+          </div>
+          <div class="rules-card-row">
+            <span class="card card-second_chance">2nd Chance</span>
+            <span>Chosen player holds this card. If they would bust, <strong>discard both</strong> the duplicate and this card — they survive, but their turn ends immediately. Only one Second Chance per player at a time.</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Modifier Cards</h3>
+        <div class="rules-cards">
+          <div class="rules-card-row">
+            <span class="card card-modifier_add">+N</span>
+            <span><strong>+2 / +4 / +6 / +8 / +10</strong> — added to your final round score.</span>
+          </div>
+          <div class="rules-card-row">
+            <span class="card card-modifier_mul">×2</span>
+            <span><strong>Doubles</strong> your number-card total first, then +modifiers are added on top.<br>
+              <em>Example: numbers sum = 19 → ×2 = 38 → +10 modifier = 48 pts</em></span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Flip 7 Bonus 🎉</h3>
+        <p>Collect <strong>7 unique number cards</strong> without busting → round ends immediately for everyone.</p>
+        <ul>
+          <li>You score: number total + modifiers + <strong>+15 bonus points</strong>.</li>
+          <li>All other active players bank whatever they currently hold.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3>Scoring</h3>
+        <ol>
+          <li>Sum of your number cards.</li>
+          <li>Apply ×2 multiplier (if held).</li>
+          <li>Add +modifier cards.</li>
+          <li>Busted players score <strong>0</strong>.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h3>Winning</h3>
+        <p>Game ends at the <strong>end of a round</strong> in which at least one player reaches 200 points. Highest total wins. Ties share the victory.</p>
+      </section>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

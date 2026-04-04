@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flip 7</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="lobby-page">
+  <div class="lobby-container">
+    <h1 class="logo">Flip 7</h1>
+    <p class="tagline">Draw cards. Don't bust. Reach 200.</p>
+
+    <div class="card-panel">
+      <h2>Create a Room</h2>
+      <p>Start a new game and share the link with friends.</p>
+      <button class="btn btn-primary btn-large" onclick="createRoom()">Create Room</button>
+    </div>
+
+    <div class="divider">or</div>
+
+    <div class="card-panel">
+      <h2>Join a Room</h2>
+      <input id="room-code" type="text" placeholder="Enter room code (e.g. a3f7b2)"
+             maxlength="6" oninput="this.value=this.value.toLowerCase()"
+             onkeydown="if(event.key==='Enter') joinRoom()">
+      <button class="btn btn-secondary btn-large" onclick="joinRoom()">Join Room</button>
+    </div>
+
+    <div class="rules">
+      <h3>How to play</h3>
+      <ul>
+        <li>On your turn: <strong>Draw</strong> a card or <strong>Stop</strong> and bank your points.</li>
+        <li>Draw a duplicate number → <strong>bust</strong> and lose all round points.</li>
+        <li><strong>Freeze</strong>: the next player skips their turn.</li>
+        <li><strong>Flip 3</strong>: draw 3 extra cards immediately.</li>
+        <li><strong>Second Chance</strong>: survive one bust automatically.</li>
+        <li>Score = sum of your number cards. First to <strong>200</strong> wins!</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    async function createRoom() {
+      try {
+        const res = await fetch('/api/rooms', { method: 'POST' });
+        const data = await res.json();
+        window.location.href = `/game/${data.roomID}`;
+      } catch (e) {
+        alert('Could not create room: ' + e.message);
+      }
+    }
+
+    function joinRoom() {
+      const code = document.getElementById('room-code').value.trim();
+      if (!code) { alert('Please enter a room code.'); return; }
+      window.location.href = `/game/${code}`;
+    }
+  </script>
+</body>
+</html>
