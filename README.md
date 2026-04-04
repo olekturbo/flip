@@ -71,6 +71,22 @@ go run ./cmd/server        # serves at http://localhost:8080
 
 Requires Go 1.22+. No other dependencies — the frontend is vanilla JS/CSS with no build step.
 
+## Tests
+
+```bash
+go test ./internal/game/...
+```
+
+The test suite covers all core game mechanics in `internal/game/`:
+
+| File | What it tests |
+|------|---------------|
+| `deck_test.go` | Deck composition — 100 cards, correct counts per type and value |
+| `player_test.go` | `RoundScore()` (table-driven), `HasNumber()`, `UniqueNumberCount()` |
+| `game_test.go` | Game mechanics — draw, bust, Second Chance, Stop, Freeze, Flip 3, Flip 7, win condition, tie at 200+, dealing-phase SC, valid targets, player management |
+
+Tests use Go's standard `testing` package. Game-mechanics tests bypass the dealing phase by constructing game state directly (same-package access to unexported fields), then drive actions through the public API (`Draw`, `Stop`, `Target`). This keeps each test focused on one mechanic with a fully deterministic deck.
+
 ## Docker
 
 ```bash
