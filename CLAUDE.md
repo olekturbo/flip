@@ -26,7 +26,9 @@ Whenever you modify **any game mechanic** in `internal/game/` — or add a new o
 
 - **New card type or deck change** → update `deck_test.go` (card counts, values)
 - **Scoring formula change** → add/update cases in `TestRoundScore` in `player_test.go`
-- **New or changed action card, bust logic, Flip 3/7, win condition, dealing phase** → add/update scenario tests in `game_test.go`
+- **New or changed action card, bust logic, Flip 3/7, win condition, dealing phase** → add/update scenario tests in `game_test.go` AND add/update BDD scenarios in `features/*.feature`
+
+The BDD feature files in `internal/game/features/` are **living documentation** — they must stay in sync with actual game behaviour. When adding a new mechanic, add a readable Gherkin scenario that describes it. When changing a mechanic, update the scenario to match.
 
 Run `go test ./internal/game/...` and confirm all tests pass before committing. Never leave a mechanic change without test coverage.
 

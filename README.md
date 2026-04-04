@@ -77,7 +77,9 @@ Requires Go 1.22+. No other dependencies — the frontend is vanilla JS/CSS with
 go test ./internal/game/...
 ```
 
-The test suite covers all core game mechanics in `internal/game/`:
+The test suite has two layers:
+
+**Unit / scenario tests** (`*_test.go`) — Go's standard `testing` package:
 
 | File | What it tests |
 |------|---------------|
@@ -85,7 +87,19 @@ The test suite covers all core game mechanics in `internal/game/`:
 | `player_test.go` | `RoundScore()` (table-driven), `HasNumber()`, `UniqueNumberCount()` |
 | `game_test.go` | Game mechanics — draw, bust, Second Chance, Stop, Freeze, Flip 3, Flip 7, win condition, tie at 200+, dealing-phase SC, valid targets, player management |
 
-Tests use Go's standard `testing` package. Game-mechanics tests bypass the dealing phase by constructing game state directly (same-package access to unexported fields), then drive actions through the public API (`Draw`, `Stop`, `Target`). This keeps each test focused on one mechanic with a fully deterministic deck.
+**BDD feature tests** (`bdd_test.go` + `features/*.feature`) — [godog](https://github.com/cucumber/godog) with Gherkin:
+
+| Feature file | What it documents |
+|---|---|
+| `scoring.feature` | All score combinations: plain numbers, ×2, ÷2, +/- modifiers, minimum zero |
+| `bust.feature` | Bust on duplicate number; modifiers never bust |
+| `second_chance.feature` | SC prevents bust, consumed on use, auto-resolves with single target |
+| `freeze.feature` | Freeze targeting, auto-target, banked score |
+| `flip3.feature` | 3 forced draws, stops on bust / SC save / Flip 7 |
+| `flip7.feature` | 7 unique numbers ends round, +15 bonus, active players bank |
+| `round_and_game.feature` | Score accumulation, win at 200+, tie continuation, bust at threshold |
+
+The feature files serve as **living documentation** of the rules — readable without knowing Go. Game-mechanics tests bypass the dealing phase by constructing state directly (same-package access), then drive actions through the public API (`Draw`, `Stop`, `Target`).
 
 ## Docker
 
