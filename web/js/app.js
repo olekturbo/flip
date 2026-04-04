@@ -167,13 +167,23 @@ function render() {
         }, 80);
       }
       if (p.status === 'busted') {
+        // If Flip 3 stagger is in progress, delay banner/shake to coincide with
+        // the bust card being revealed (last card of the stagger).
+        const bustCard = p.cards[p.cards.length - 1];
+        const bustDelay = revealProgress[pid] !== undefined
+          ? 350 + (newCount - 1) * 700 + 80   // wait for last stagger card
+          : 80;
+        const bustLabel = bustCard && bustCard.type === 'number'
+          ? `💥 ${pname} BUSTED — duplicate ${bustCard.value}!`
+          : `💥 ${pname} BUSTED!`;
         setTimeout(() => {
+          showActionBanner(bustLabel, 'rgba(185,28,28,0.95)');
           const panel = document.querySelector(`[data-player-id="${pid}"]`);
           if (panel) {
             panel.classList.add('just-busted');
             panel.addEventListener('animationend', () => panel.classList.remove('just-busted'), { once: true });
           }
-        }, 80);
+        }, bustDelay);
       }
     }
 
