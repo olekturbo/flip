@@ -24,8 +24,11 @@
       <h2>Waiting for players</h2>
       <div>
         <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:0.5rem">Share this link:</p>
-        <input id="share-url" type="text" readonly onclick="this.select()"
-               style="background:rgba(0,0,0,0.4);cursor:pointer;font-size:0.82rem">
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <input id="share-url" type="text" readonly onclick="this.select()"
+                 style="background:rgba(0,0,0,0.4);cursor:pointer;font-size:0.82rem;flex:1;min-width:0">
+          <button id="btn-copy-lobby" class="btn btn-secondary" onclick="copyLobbyLink(this)" title="Copy link" style="flex-shrink:0;padding:0.45rem 0.75rem;font-size:0.85rem">Copy</button>
+        </div>
       </div>
       <h3>Players in room</h3>
       <ul id="lobby-player-list" class="player-list"></ul>

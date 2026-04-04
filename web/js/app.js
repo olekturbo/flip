@@ -634,3 +634,12 @@ function copyLink() {
     setTimeout(() => { btn.textContent = prev; }, 1500);
   });
 }
+
+function copyLobbyLink(btn) {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const prev = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1800);
+  });
+}
