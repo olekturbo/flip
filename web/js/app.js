@@ -497,6 +497,7 @@ function showActionBanner(text, bgColor) {
   const banner = document.createElement('div');
   banner.className = 'action-banner';
   banner.style.background = bgColor;
+  banner.textContent = text;
   document.body.appendChild(banner);
   // Double rAF ensures the initial opacity:0 state is painted before transition.
   requestAnimationFrame(() => requestAnimationFrame(() => banner.classList.add('action-banner-show')));
