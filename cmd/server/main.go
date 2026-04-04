@@ -2,29 +2,34 @@ package main
 
 import (
 	"flag"
+	"io/fs"
 	"log"
 	"net/http"
-	"path/filepath"
-	"runtime"
+	"os"
 
+	assets "flip7"
 	"flip7/internal/api"
 	"flip7/internal/hub"
 )
 
 func main() {
-	addr := flag.String("addr", ":8080", "HTTP listen address")
+	defaultAddr := ":8080"
+	if port := os.Getenv("PORT"); port != "" {
+		defaultAddr = ":" + port
+	}
+	addr := flag.String("addr", defaultAddr, "HTTP listen address")
 	flag.Parse()
 
-	// Locate the web/ directory relative to this source file so the server
-	// works regardless of the working directory when launched.
-	_, filename, _, _ := runtime.Caller(0)
-	root := filepath.Join(filepath.Dir(filename), "..", "..")
-	webDir := filepath.Join(root, "web")
+	// Strip the "web" prefix so paths resolve as /index.html, not /web/index.html.
+	webFS, err := fs.Sub(assets.WebFS, "web")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	h := hub.New()
-	router := api.NewRouter(h, webDir)
+	router := api.NewRouter(h, webFS)
 
-	log.Printf("Flip 7 server listening on http://localhost%s", *addr)
+	log.Printf("Flip 7 listening on %s", *addr)
 	if err := http.ListenAndServe(*addr, router); err != nil {
 		log.Fatal(err)
 	}

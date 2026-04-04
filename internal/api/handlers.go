@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"log"
 	"net/http"
-	"path/filepath"
 
 	"nhooyr.io/websocket"
 
@@ -13,8 +13,8 @@ import (
 )
 
 // NewRouter builds and returns the HTTP mux for the server.
-// webDir is the path to the directory containing index.html, game.html, etc.
-func NewRouter(h *hub.Hub, webDir string) http.Handler {
+// webFS is an fs.FS rooted at the directory containing index.html, game.html, etc.
+func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
 	mux := http.NewServeMux()
 
 	// REST: create a new room and return its ID.
@@ -57,11 +57,11 @@ func NewRouter(h *hub.Hub, webDir string) http.Handler {
 
 	// Serve game.html for any /game/{roomID} path.
 	mux.HandleFunc("GET /game/{roomID}", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(webDir, "game.html"))
+		http.ServeFileFS(w, r, webFS, "game.html")
 	})
 
 	// Serve static assets (index.html, css/, js/).
-	mux.Handle("/", http.FileServer(http.Dir(webDir)))
+	mux.Handle("/", http.FileServerFS(webFS))
 
 	return mux
 }
