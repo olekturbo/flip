@@ -229,21 +229,28 @@ function render() {
     }
     case 'round_end':
     case 'game_over': {
-      // Cancel any in-progress Flip 3 reveal sequences — round is over.
-      clearAllRevealTimers();
       const phase = gameState.phase;
       const renderFn = phase === 'round_end' ? renderRoundEnd : renderGameOver;
       if (shownOverlayPhase === phase) {
         // Already shown — just refresh content (e.g. countdown tick)
         renderFn();
       } else {
-        // First time entering this phase — delay 1 s so the final action is visible
         if (overlayTimer) clearTimeout(overlayTimer);
+        // If a Flip 3 stagger is in progress, wait for it to finish so the
+        // bust card is actually visible before the overlay covers everything.
+        const revealMs = Object.keys(revealProgress).reduce((max, pid) => {
+          const p = gameState.players.find(pl => pl.id === pid);
+          if (!p) return max;
+          const remaining = p.cards.length - (revealProgress[pid] || 0);
+          return Math.max(max, remaining * 700);
+        }, 0);
+        const delay = Math.max(1800, revealMs + 900);
         overlayTimer = setTimeout(() => {
           overlayTimer = null;
           shownOverlayPhase = phase;
+          clearAllRevealTimers(); // clean up after overlay is about to show
           renderFn();
-        }, 1000);
+        }, delay);
       }
       break;
     }
