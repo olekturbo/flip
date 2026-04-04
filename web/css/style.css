@@ -777,7 +777,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 }
 
 .card-new {
-  animation: cardReveal 0.42s ease-out;
+  animation: cardReveal 0.55s ease-out;
   transform-origin: left center;
 }
 
@@ -786,9 +786,9 @@ input[type="text"]:focus { border-color: var(--gold); }
   background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%) !important;
   border: 1px solid rgba(255,255,255,0.3) !important;
   color: transparent !important;
-  transition: left 0.55s cubic-bezier(0.22,0.61,0.36,1),
-              top  0.55s cubic-bezier(0.22,0.61,0.36,1),
-              opacity 0.12s 0.44s;
+  transition: left 0.75s cubic-bezier(0.22,0.61,0.36,1),
+              top  0.75s cubic-bezier(0.22,0.61,0.36,1),
+              opacity 0.15s 0.62s;
 }
 
 /* ── Status-change animations ────────────────────────────────────────────── */
@@ -808,11 +808,11 @@ input[type="text"]:focus { border-color: var(--gold); }
 }
 
 .just-frozen {
-  animation: freezeFlash 0.9s ease-out;
+  animation: freezeFlash 1.2s ease-out;
 }
 
 .just-busted {
-  animation: bustShake 0.5s ease-in-out;
+  animation: bustShake 0.7s ease-in-out;
 }
 
 @keyframes secondChanceFlash {
@@ -822,7 +822,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 }
 
 .just-second-chance {
-  animation: secondChanceFlash 1s ease-out;
+  animation: secondChanceFlash 1.3s ease-out;
 }
 
 /* Ghost cards shown briefly when Second Chance is consumed */
@@ -832,7 +832,7 @@ input[type="text"]:focus { border-color: var(--gold); }
   border: 2px dashed #fca5a5 !important;
   font-weight: 700 !important;
   text-decoration: line-through !important;
-  animation: cardReveal 0.35s ease-out;
+  animation: cardReveal 0.5s ease-out;
 }
 
 .ghost-sc-card {
@@ -840,7 +840,7 @@ input[type="text"]:focus { border-color: var(--gold); }
   color: #6ee7b7 !important;
   border: 2px dashed #10b981 !important;
   font-size: 1.1rem !important;
-  animation: cardReveal 0.35s ease-out;
+  animation: cardReveal 0.5s ease-out;
 }
 
 .ghost-card-exit {

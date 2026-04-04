@@ -175,7 +175,7 @@ function render() {
         // the bust card being revealed (last card of the stagger).
         const bustCard = p.cards[p.cards.length - 1];
         const bustDelay = revealProgress[pid] !== undefined
-          ? 350 + (newCount - 1) * 700 + 80   // wait for last stagger card
+          ? 500 + (newCount - 1) * 950 + 80   // wait for last stagger card
           : 80;
         const bustVal = bustCard && bustCard.type === 'number' ? bustCard.value : null;
         const bustLabel = bustVal !== null
@@ -199,7 +199,7 @@ function render() {
                 setTimeout(() => {
                   ghostBust.classList.add('ghost-card-exit');
                   setTimeout(() => ghostBust.remove(), 480);
-                }, 1800);
+                }, 2500);
               }
             }
           }
@@ -246,12 +246,12 @@ function render() {
         panel.classList.add('just-second-chance');
         panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
 
-        // Fade both ghost cards out after 1.8s
+        // Fade both ghost cards out after 2.5s
         setTimeout(() => {
           ghostBust.classList.add('ghost-card-exit');
           ghostSC.classList.add('ghost-card-exit');
           setTimeout(() => { ghostBust.remove(); ghostSC.remove(); }, 480);
-        }, 1800);
+        }, 2500);
       }, 80);
     }
   });
@@ -320,9 +320,9 @@ function render() {
           const p = gameState.players.find(pl => pl.id === pid);
           if (!p) return max;
           const remaining = p.cards.length - (revealProgress[pid] || 0);
-          return Math.max(max, remaining * 700);
+          return Math.max(max, remaining * 950);
         }, 0);
-        const delay = Math.max(1800, revealMs + 900);
+        const delay = Math.max(2500, revealMs + 1200);
         overlayTimer = setTimeout(() => {
           overlayTimer = null;
           shownOverlayPhase = phase;
@@ -365,7 +365,7 @@ function flyCardFromDeck(targetPlayerID) {
     card.style.left    = `${endX}px`;
     card.style.top     = `${endY}px`;
     card.style.opacity = '0';
-    setTimeout(() => card.remove(), 420);
+    setTimeout(() => card.remove(), 900);
   }));
 }
 
@@ -467,8 +467,8 @@ function startCardReveals(player, prevCount) {
   }
 
   // Flip 3 (or similar multi-card event): stagger reveals.
-  const STAGGER    = 700;  // ms between cards
-  const START      = 350;  // brief pause so the banner/message can land first
+  const STAGGER    = 950;  // ms between cards
+  const START      = 500;  // brief pause so the banner/message can land first
 
   revealProgress[player.id] = prevCount;
   revealTimers[player.id]   = [];
@@ -514,7 +514,7 @@ function showActionBanner(text, bgColor) {
     banner.classList.remove('action-banner-show');
     banner.classList.add('action-banner-hide');
     setTimeout(() => banner.remove(), 400);
-  }, 2200);
+  }, 2800);
 }
 
 // ── Round end ─────────────────────────────────────────────────────────────────
