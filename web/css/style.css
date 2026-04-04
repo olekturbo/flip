@@ -823,19 +823,9 @@ input[type="text"]:focus { border-color: var(--gold); }
   background: rgba(220,38,38,0.88) !important;
   color: #fff !important;
   border: 2px dashed #fca5a5 !important;
+  font-weight: 700 !important;
+  text-decoration: line-through !important;
   animation: cardReveal 0.35s ease-out;
-  position: relative;
-}
-.ghost-bust-card::after {
-  content: '✕';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.4rem;
-  font-weight: 900;
-  color: rgba(255,255,255,0.55);
 }
 
 .ghost-sc-card {
