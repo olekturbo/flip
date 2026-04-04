@@ -573,15 +573,19 @@ func (g *Game) dealCardTo(p *Player) {
 		if p.HasNumber(card.Value) {
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted
+			g.logEvent("%s dealt %d — BUSTED (duplicate)", p.Name, card.Value)
 		} else {
 			p.Cards = append(p.Cards, card)
+			g.logEvent("%s dealt %d", p.Name, card.Value)
 		}
 	case CardTypeModifierAdd, CardTypeModifierMul, CardTypeModifierSub, CardTypeModifierDiv:
 		p.Cards = append(p.Cards, card)
+		g.logEvent("%s dealt %s", p.Name, card.Name)
 	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance:
 		targets := g.validTargetsFor(card)
 		switch len(targets) {
 		case 0:
+			g.logEvent("%s dealt %s — no valid target, discarded", p.Name, card.Name)
 			g.Message = fmt.Sprintf("%s was dealt %s — no valid target, discarded.", p.Name, card.Name)
 		case 1:
 			g.resolveActionWithTarget(p, card, g.playerByID(targets[0]))
