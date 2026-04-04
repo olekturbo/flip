@@ -345,7 +345,7 @@ function render() {
           const remaining = p.cards.length - (revealProgress[pid] || 0);
           return Math.max(max, remaining * 950);
         }, 0);
-        const delay = Math.max(2500, revealMs + 1200);
+        const delay = Math.max(900, revealMs + 600);
         overlayTimer = setTimeout(() => {
           overlayTimer = null;
           shownOverlayPhase = phase;
