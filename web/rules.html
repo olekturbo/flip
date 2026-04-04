@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rules — Flip 7</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem 4rem; }
+    .rules-page-box { width: 100%; max-width: 640px; }
+    .rules-page-box h2.rules-title { margin-bottom: 1.5rem; }
+    .back-link { display: inline-block; margin-bottom: 1.5rem; color: var(--text-dim); font-size: 0.88rem; text-decoration: none; }
+    .back-link:hover { color: var(--text); }
+  </style>
+</head>
+<body class="game-page">
+  <div class="rules-page-box">
+    <a href="/" class="back-link">← Back to home</a>
+
+    <h2 class="rules-title">How to Play — Flip 7</h2>
+
+    <section>
+      <h3>Goal</h3>
+      <p>Be the first player to reach <strong>200 points</strong> across multiple rounds.</p>
+    </section>
+
+    <section>
+      <h3>Deck — 100 cards</h3>
+      <ul>
+        <li><strong>Number cards (79):</strong> values 0–12; card N appears N times (0 appears once).</li>
+        <li><strong>Action cards (9):</strong> 3× Freeze, 3× Flip 3, 3× Second Chance.</li>
+        <li><strong>Positive modifier cards (6):</strong> +2, +4, +6, +8, +10, ×2.</li>
+        <li><strong>Negative modifier cards (6):</strong> -2, -4, -6, -8, -10, ÷2.</li>
+      </ul>
+      <p class="rules-note">The deck is <em>not</em> reshuffled between rounds — it carries over. It's only reshuffled when it runs out.</p>
+    </section>
+
+    <section>
+      <h3>Each Round</h3>
+      <ol>
+        <li>The dealer deals <strong>one card face-up</strong> to every player (starting left of dealer). Action cards resolve immediately during dealing.</li>
+        <li>Play passes left of the dealer. On your turn you have two options:
+          <ul>
+            <li><strong>Draw</strong> — take <em>one</em> card from the deck, then the turn passes to the next player.</li>
+            <li><strong>Stay</strong> — bank your current points and exit the round (you keep your score).</li>
+          </ul>
+        </li>
+        <li>Number cards build your hand. Modifier and Action cards are placed above the line.</li>
+        <li>After all players have either Stayed, been Frozen, or busted the round ends.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h3>Busting</h3>
+      <p>Drawing a number you <strong>already have</strong> = bust. You score <strong>0</strong> this round.</p>
+      <p class="rules-note">Only duplicate number cards cause a bust — action and modifier cards never do.</p>
+    </section>
+
+    <section>
+      <h3>Action Cards</h3>
+      <p>When you draw one, you <strong>choose any active player</strong> to receive its effect (including yourself). If you're the only active player, it targets you automatically.</p>
+      <div class="rules-cards">
+        <div class="rules-card-row">
+          <span class="card card-freeze">Freeze</span>
+          <span>Chosen player <strong>banks their points and exits</strong> the round immediately.</span>
+        </div>
+        <div class="rules-card-row">
+          <span class="card card-flip3">Flip 3</span>
+          <span>Chosen player must <strong>draw 3 cards</strong> one at a time. The sequence stops early on a bust or Flip 7. Action cards drawn during Flip 3 are deferred and resolve interactively after all non-bust draws complete.</span>
+        </div>
+        <div class="rules-card-row">
+          <span class="card card-second_chance">2nd Chance</span>
+          <span>Chosen player holds this card. If they would bust, <strong>discard both</strong> the duplicate and this card — they survive but <strong>their turn ends</strong> (play passes to the next player). Only one Second Chance per player at a time.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>Modifier Cards</h3>
+      <div class="rules-cards">
+        <div class="rules-card-row">
+          <span class="card card-modifier_add">+N</span>
+          <span><strong>+2 / +4 / +6 / +8 / +10</strong> — added to your final round score.</span>
+        </div>
+        <div class="rules-card-row">
+          <span class="card card-modifier_mul">×2</span>
+          <span><strong>Doubles</strong> your number-card total first, then modifiers are applied on top.<br>
+            <em>Example: numbers = 19 → ×2 = 38 → +10 = 48 pts</em></span>
+        </div>
+        <div class="rules-card-row">
+          <span class="card card-modifier_sub">-N</span>
+          <span><strong>-2 / -4 / -6 / -8 / -10</strong> — subtracted from your final round score (minimum 0).</span>
+        </div>
+        <div class="rules-card-row">
+          <span class="card card-modifier_div">÷2</span>
+          <span><strong>Halves</strong> your number-card total (rounded down), then modifiers are applied on top. Cancels out with ×2 if both held.<br>
+            <em>Example: numbers = 18 → ÷2 = 9 → -4 = 5 pts</em></span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>Flip 7 Bonus 🎉</h3>
+      <p>Collect <strong>7 unique number cards</strong> without busting → round ends immediately for everyone.</p>
+      <ul>
+        <li>You score: number total + modifiers + <strong>+15 bonus points</strong>.</li>
+        <li>All other active players bank whatever they currently hold.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Scoring</h3>
+      <ol>
+        <li>Sum of your number cards.</li>
+        <li>Apply ×2 or ÷2 (if held; they cancel each other out).</li>
+        <li>Add +modifier cards and subtract -modifier cards.</li>
+        <li>Score cannot go below <strong>0</strong>.</li>
+        <li>Busted players score <strong>0</strong>.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h3>Winning</h3>
+      <p>Game ends at the <strong>end of a round</strong> in which one player has the highest score at or above 200 points.</p>
+      <p>If two or more players are <strong>tied at 200+</strong>, the round ends normally but the game continues — keep playing until one player pulls clearly ahead.</p>
+    </section>
+  </div>
+</body>
+</html>
