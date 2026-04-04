@@ -56,9 +56,7 @@ Collect **7 unique number cards** → round ends immediately for everyone.
 You score your number total + modifiers + **+15 bonus**. All other active players bank whatever they hold.
 
 ### Winning
-Game ends at the **end of a round** in which at least one player reaches **200 points**. Highest total wins. Ties are shared — both/all tied players win simultaneously.
-
-> **Design note:** The official physical game continues playing additional rounds to break ties at 200+. This implementation declares co-winners for a cleaner online experience.
+Game ends at the **end of a round** in which one player has the **highest score at or above 200 points**. If two or more players are tied at 200+, the round ends but the game continues — rounds are played until one player pulls clearly ahead.
 
 ---
 

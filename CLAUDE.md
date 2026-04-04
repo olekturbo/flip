@@ -52,8 +52,7 @@ Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 7 unique number cards → round ends immediately; player scores +15 on top of their normal score; other active players bank their current hand.
 
 ### Win condition
-First to reach 200+ points at end of a round wins. Ties → co-winners (both win simultaneously).  
-**Design deviation:** The physical game continues rounds to break 200+ ties; this implementation declares co-winners for a cleaner online experience.
+Game ends when one player has the **strictly highest** score at or above 200 at the end of a round. If multiple players are tied at 200+, the game continues — rounds are played until the tie is broken.
 
 ## Tech stack
 - **Backend:** Go, `nhooyr.io/websocket`, packages `internal/game`, `internal/hub`, `internal/api`

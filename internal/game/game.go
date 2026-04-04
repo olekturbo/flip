@@ -935,42 +935,57 @@ func (g *Game) endRound(flip7Winner *Player) {
 		}
 	}
 
-	// Find highest score at or above WinScore; collect all tied players.
+	// Find the highest total score at or above WinScore.
 	topScore := 0
 	for _, p := range g.Players {
 		if p.TotalScore >= WinScore && p.TotalScore > topScore {
 			topScore = p.TotalScore
 		}
 	}
-	var winners []*Player
+
+	// Collect every player sitting at that top score.
+	var leaders []*Player
 	if topScore > 0 {
 		for _, p := range g.Players {
 			if p.TotalScore == topScore {
-				winners = append(winners, p)
+				leaders = append(leaders, p)
 			}
 		}
 	}
 
-	if len(winners) > 0 {
+	switch {
+	case len(leaders) == 1:
+		// One player is clearly ahead at 200+ — they win.
 		g.Phase = PhaseGameOver
-		g.Winners = winners
-		names := make([]string, len(winners))
-		for i, w := range winners {
-			names[i] = fmt.Sprintf("%s (%d pts)", w.Name, w.TotalScore)
+		g.Winners = leaders
+		g.Message = fmt.Sprintf("GAME OVER — %s wins with %d pts! (%s)",
+			leaders[0].Name, leaders[0].TotalScore, strings.Join(parts, ", "))
+
+	case len(leaders) > 1:
+		// Multiple players tied at 200+ — keep playing until one pulls ahead.
+		names := make([]string, len(leaders))
+		for i, l := range leaders {
+			names[i] = l.Name
 		}
-		if len(winners) == 1 {
-			g.Message = fmt.Sprintf("GAME OVER — %s wins! (%s)",
-				winners[0].Name, strings.Join(parts, ", "))
+		tieMsg := fmt.Sprintf("%s are tied at %d pts — playing on to break the tie!",
+			strings.Join(names, " & "), topScore)
+		if flip7Winner != nil {
+			g.Message = fmt.Sprintf("FLIP 7 by %s (+15 bonus)! %s  %s — next round soon.",
+				flip7Winner.Name, strings.Join(parts, ", "), tieMsg)
 		} else {
-			g.Message = fmt.Sprintf("GAME OVER — Tie! %s (%s)",
-				strings.Join(names, " & "), strings.Join(parts, ", "))
+			g.Message = fmt.Sprintf("Round %d: %s  %s — next round soon.",
+				g.RoundNumber, strings.Join(parts, ", "), tieMsg)
 		}
-	} else if flip7Winner != nil {
-		g.Message = fmt.Sprintf("FLIP 7 by %s (+15 bonus)! %s — next round soon.",
-			flip7Winner.Name, strings.Join(parts, ", "))
-	} else {
-		g.Message = fmt.Sprintf("Round %d over: %s — next round starting soon.",
-			g.RoundNumber, strings.Join(parts, ", "))
+
+	default:
+		// Nobody at 200+ yet — normal round end.
+		if flip7Winner != nil {
+			g.Message = fmt.Sprintf("FLIP 7 by %s (+15 bonus)! %s — next round soon.",
+				flip7Winner.Name, strings.Join(parts, ", "))
+		} else {
+			g.Message = fmt.Sprintf("Round %d over: %s — next round starting soon.",
+				g.RoundNumber, strings.Join(parts, ", "))
+		}
 	}
 }
 
