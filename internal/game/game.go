@@ -590,6 +590,7 @@ func (g *Game) dealCardTo(p *Player) {
 		case 1:
 			g.resolveActionWithTarget(p, card, g.playerByID(targets[0]))
 		default:
+			g.logEvent("%s dealt %s — choosing target", p.Name, card.Name)
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
 			g.Message = fmt.Sprintf("%s was dealt %s — choose a target!", p.Name, card.Name)
 		}
