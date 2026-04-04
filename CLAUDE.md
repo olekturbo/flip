@@ -20,6 +20,16 @@ Specific sections to watch:
 
 Always update `README.md` as well when rules or architecture change.
 
+## Tests sync rule (MANDATORY)
+
+Whenever you modify **any game mechanic** in `internal/game/` — or add a new one — you **must** also update the tests in `internal/game/*_test.go`.
+
+- **New card type or deck change** → update `deck_test.go` (card counts, values)
+- **Scoring formula change** → add/update cases in `TestRoundScore` in `player_test.go`
+- **New or changed action card, bust logic, Flip 3/7, win condition, dealing phase** → add/update scenario tests in `game_test.go`
+
+Run `go test ./internal/game/...` and confirm all tests pass before committing. Never leave a mechanic change without test coverage.
+
 ## Authoritative rules (source: The Op official rulebook)
 
 These are the official rules this implementation is designed to match. Deviations are noted.
