@@ -628,9 +628,9 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("%s survived bust with 2nd Chance (drew %d)", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Turn ends.", p.Name, card.Value)
-				g.advanceTurn()
+				g.logEvent("%s survived bust with 2nd Chance (drew %d) — turn continues", p.Name, card.Value)
+				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Draw or stay.", p.Name, card.Value)
+				// Per rules: turn continues normally — player may draw again or stay.
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
@@ -717,17 +717,20 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		}
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
-			if target.Status != StatusActive || g.Phase != PhasePlaying {
+			if g.Phase != PhasePlaying {
+				// Round ended mid-flip (e.g. Flip 7 triggered) — stop.
 				break
 			}
 			d, ended := g.drawOneFlip3(target)
 			deferred = append(deferred, d...)
 			if ended {
+				// ended=true only on Flip 7 or empty deck; bust continues per rules.
 				break
 			}
 		}
 		// Resolve action cards drawn during the Flip 3 interactively when possible.
-		if len(deferred) > 0 && target.Status == StatusActive && g.Phase == PhasePlaying {
+		// Even if the target busted, deferred action cards still resolve.
+		if len(deferred) > 0 && g.Phase == PhasePlaying {
 			g.deferredCards = deferred
 			g.deferredFor = target
 			g.deferredAdvance = !g.inDealing
@@ -771,15 +774,17 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d)", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draw ends.", p.Name, card.Value)
-				return nil, true
+				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d) — drawing continues", p.Name, card.Value)
+				g.Message = fmt.Sprintf("%s drew %d during Flip 3 — Second Chance used! Drawing continues.", p.Name, card.Value)
+				// Per rules: SC saves the player and the Flip 3 sequence continues.
+				return nil, false
 			}
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted
 			g.logEvent("  %s BUSTED in Flip 3 — duplicate %d", p.Name, card.Value)
 			g.Message = fmt.Sprintf("%s drew %d during Flip 3 — BUSTED!", p.Name, card.Value)
-			return nil, true
+			// Per rules: complete all 3 draws even after a bust.
+			return nil, false
 		}
 		p.Cards = append(p.Cards, card)
 		g.logEvent("  %s drew %d (Flip 3)", p.Name, card.Value)
@@ -831,7 +836,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		g.Message = fmt.Sprintf("Flip 3 (deferred) — %s draws 3 more cards!", target.Name)
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
-			if target.Status != StatusActive || g.Phase != PhasePlaying {
+			if g.Phase != PhasePlaying {
 				break
 			}
 			d, ended := g.drawOneFlip3(target)
@@ -841,7 +846,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 			}
 		}
 		for _, dc := range deferred {
-			if target.Status == StatusActive && g.Phase == PhasePlaying {
+			if g.Phase == PhasePlaying {
 				g.resolveActionAuto(target, dc)
 			}
 		}

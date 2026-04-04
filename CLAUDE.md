@@ -18,7 +18,46 @@ Specific sections to watch:
 | Win score constant (`WinScore`) | "Winning" |
 | Bust / Second Chance logic | "Busting", "Action Cards → 2nd Chance" |
 
-## Tech stack reminder
-- Backend: Go, `nhooyr.io/websocket`, package layout `internal/game`, `internal/hub`, `internal/api`
-- Frontend: vanilla JS + CSS, no build step, files in `web/`
-- Run: `go run ./cmd/server` from project root
+Always update `README.md` as well when rules or architecture change.
+
+## Authoritative rules (source: The Op official rulebook)
+
+These are the official rules this implementation is designed to match. Deviations are noted.
+
+### Deck — 94 cards
+- **Number cards (79):** values 0–12; card N appears N times (0 appears once).
+- **Action cards (9):** 3× Freeze, 3× Flip 3, 3× Second Chance.
+- **Modifier cards (6):** +2, +4, +6, +8, +10, ×2.
+- Deck carries over between rounds; reshuffled only when empty.
+
+### Turn
+Draw one card OR stay. Action cards require choosing a target (any active player including self; auto-targets self when only one active player remains).
+
+### Bust
+Drawing a duplicate number = bust, score 0. Only number cards cause busts.
+
+### Second Chance
+- When used to prevent a bust: discard both SC and duplicate; **turn continues normally** (player may draw again or stay). This applies during Flip 3 as well — the remaining Flip 3 draws continue.
+- Only one SC per player at a time.
+
+### Flip 3
+- Target draws exactly 3 cards one at a time.
+- **All 3 draws always complete** — even if the target busts mid-sequence. Only a Flip 7 trigger or empty deck stops the sequence early.
+- Action cards drawn during Flip 3 are deferred and resolved interactively after all 3 draws.
+
+### Scoring
+`(sum of number cards [× 2 if ×2 held]) + sum of +modifiers`
+
+### Flip 7 bonus
+7 unique number cards → round ends immediately; player scores +15 on top of their normal score; other active players bank their current hand.
+
+### Win condition
+First to reach 200+ points at end of a round wins. Ties → co-winners (both win simultaneously).  
+**Design deviation:** The physical game continues rounds to break 200+ ties; this implementation declares co-winners for a cleaner online experience.
+
+## Tech stack
+- **Backend:** Go, `nhooyr.io/websocket`, packages `internal/game`, `internal/hub`, `internal/api`
+- **Frontend:** vanilla JS + CSS, no build step, files in `web/`
+- **Run locally:** `go run ./cmd/server` (serves on :8080)
+- **Docker:** `docker build -t flip7 . && docker run -p 8080:8080 flip7`
+- Static files are embedded at compile time via `embed.go` (`//go:embed web`)
