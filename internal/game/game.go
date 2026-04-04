@@ -717,20 +717,17 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		}
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
-			if g.Phase != PhasePlaying {
-				// Round ended mid-flip (e.g. Flip 7 triggered) — stop.
+			if target.Status != StatusActive || g.Phase != PhasePlaying {
 				break
 			}
 			d, ended := g.drawOneFlip3(target)
 			deferred = append(deferred, d...)
 			if ended {
-				// ended=true only on Flip 7 or empty deck; bust continues per rules.
 				break
 			}
 		}
 		// Resolve action cards drawn during the Flip 3 interactively when possible.
-		// Even if the target busted, deferred action cards still resolve.
-		if len(deferred) > 0 && g.Phase == PhasePlaying {
+		if len(deferred) > 0 && target.Status == StatusActive && g.Phase == PhasePlaying {
 			g.deferredCards = deferred
 			g.deferredFor = target
 			g.deferredAdvance = !g.inDealing
@@ -783,8 +780,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 			p.Status = StatusBusted
 			g.logEvent("  %s BUSTED in Flip 3 — duplicate %d", p.Name, card.Value)
 			g.Message = fmt.Sprintf("%s drew %d during Flip 3 — BUSTED!", p.Name, card.Value)
-			// Per rules: complete all 3 draws even after a bust.
-			return nil, false
+			return nil, true // bust stops the Flip 3 sequence
 		}
 		p.Cards = append(p.Cards, card)
 		g.logEvent("  %s drew %d (Flip 3)", p.Name, card.Value)
@@ -836,7 +832,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		g.Message = fmt.Sprintf("Flip 3 (deferred) — %s draws 3 more cards!", target.Name)
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
-			if g.Phase != PhasePlaying {
+			if target.Status != StatusActive || g.Phase != PhasePlaying {
 				break
 			}
 			d, ended := g.drawOneFlip3(target)
@@ -846,7 +842,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 			}
 		}
 		for _, dc := range deferred {
-			if g.Phase == PhasePlaying {
+			if target.Status == StatusActive && g.Phase == PhasePlaying {
 				g.resolveActionAuto(target, dc)
 			}
 		}

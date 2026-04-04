@@ -42,8 +42,8 @@ Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 
 ### Flip 3
 - Target draws exactly 3 cards one at a time.
-- **All 3 draws always complete** — even if the target busts mid-sequence. Only a Flip 7 trigger or empty deck stops the sequence early.
-- Action cards drawn during Flip 3 are deferred and resolved interactively after all 3 draws.
+- Sequence stops early on **bust** or **Flip 7**; otherwise all 3 are drawn.
+- Action cards drawn during Flip 3 are deferred and resolved interactively after all draws complete.
 
 ### Scoring
 `(sum of number cards [× 2 if ×2 held]) + sum of +modifiers`
