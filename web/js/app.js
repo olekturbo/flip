@@ -173,8 +173,9 @@ function render() {
         const bustDelay = revealProgress[pid] !== undefined
           ? 350 + (newCount - 1) * 700 + 80   // wait for last stagger card
           : 80;
-        const bustLabel = bustCard && bustCard.type === 'number'
-          ? `💥 ${pname} BUSTED — duplicate ${bustCard.value}!`
+        const bustVal = bustCard && bustCard.type === 'number' ? bustCard.value : null;
+        const bustLabel = bustVal !== null
+          ? `💥 ${pname} BUSTED — duplicate ${bustVal}!`
           : `💥 ${pname} BUSTED!`;
         setTimeout(() => {
           showActionBanner(bustLabel, 'rgba(185,28,28,0.95)');
@@ -182,21 +183,66 @@ function render() {
           if (panel) {
             panel.classList.add('just-busted');
             panel.addEventListener('animationend', () => panel.classList.remove('just-busted'), { once: true });
+            // Ghost card: show the duplicate that caused the bust, then fade out
+            if (bustVal !== null) {
+              const cardsEl = panel.querySelector('.player-cards');
+              if (cardsEl) {
+                const ghostBust = document.createElement('div');
+                ghostBust.className = 'card ghost-bust-card';
+                ghostBust.textContent = bustVal;
+                ghostBust.title = `Duplicate ${bustVal} — BUSTED`;
+                cardsEl.appendChild(ghostBust);
+                setTimeout(() => {
+                  ghostBust.classList.add('ghost-card-exit');
+                  setTimeout(() => ghostBust.remove(), 480);
+                }, 1800);
+              }
+            }
           }
         }, bustDelay);
       }
     }
 
     // Second Chance consumed: hasSecondChance flipped true→false while still active
-    if (prev && prev.hasSecondChance && !p.hasSecondChance && p.status === 'active') {
+    if (prev && prev.hasSecondChance && !p.hasSecondChance && p.status !== 'busted') {
       const pid = p.id, pname = p.name;
-      showActionBanner(`🛡️ ${pname} — 2nd Chance saved the bust!`, 'rgba(5,120,80,0.95)');
+      // Parse the duplicate value from the message (e.g. "drew 9 (duplicate!)")
+      const scMatch = gameState.message.match(/drew (\d+) .*duplicate/);
+      const savedVal = scMatch ? scMatch[1] : '?';
+
+      showActionBanner(`🛡️ ${pname} — 2nd Chance saved from ${savedVal}!`, 'rgba(5,120,80,0.95)');
+
+      // Inject ghost cards into the player's hand so the event is clear visually.
       setTimeout(() => {
         const panel = document.querySelector(`[data-player-id="${pid}"]`);
-        if (panel) {
-          panel.classList.add('just-second-chance');
-          panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
-        }
+        if (!panel) return;
+        const cardsEl = panel.querySelector('.player-cards');
+        if (!cardsEl) return;
+
+        // Ghost: the would-be bust card (red, crossed out)
+        const ghostBust = document.createElement('div');
+        ghostBust.className = 'card ghost-bust-card';
+        ghostBust.textContent = savedVal;
+        ghostBust.title = `Would-be duplicate ${savedVal}`;
+        cardsEl.appendChild(ghostBust);
+
+        // Ghost: the consumed SC card (green shield)
+        const ghostSC = document.createElement('div');
+        ghostSC.className = 'card ghost-sc-card';
+        ghostSC.textContent = '🛡️';
+        ghostSC.title = '2nd Chance used';
+        cardsEl.appendChild(ghostSC);
+
+        // Panel glow
+        panel.classList.add('just-second-chance');
+        panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
+
+        // Fade both ghost cards out after 1.8s
+        setTimeout(() => {
+          ghostBust.classList.add('ghost-card-exit');
+          ghostSC.classList.add('ghost-card-exit');
+          setTimeout(() => { ghostBust.remove(); ghostSC.remove(); }, 480);
+        }, 1800);
       }, 80);
     }
   });

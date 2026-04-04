@@ -628,9 +628,9 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("%s survived bust with 2nd Chance (drew %d) — turn continues", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Draw or stay.", p.Name, card.Value)
-				// Per rules: turn continues normally — player may draw again or stay.
+				g.logEvent("%s survived bust with 2nd Chance (drew %d)", p.Name, card.Value)
+				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Turn ends.", p.Name, card.Value)
+				g.advanceTurn()
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
@@ -771,10 +771,9 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d) — drawing continues", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d during Flip 3 — Second Chance used! Drawing continues.", p.Name, card.Value)
-				// Per rules: SC saves the player and the Flip 3 sequence continues.
-				return nil, false
+				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d)", p.Name, card.Value)
+				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draw ends.", p.Name, card.Value)
+				return nil, true // SC stops the Flip 3 sequence; turn will end normally
 			}
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted

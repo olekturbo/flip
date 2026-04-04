@@ -818,6 +818,40 @@ input[type="text"]:focus { border-color: var(--gold); }
   animation: secondChanceFlash 1s ease-out;
 }
 
+/* Ghost cards shown briefly when Second Chance is consumed */
+.ghost-bust-card {
+  background: rgba(220,38,38,0.88) !important;
+  color: #fff !important;
+  border: 2px dashed #fca5a5 !important;
+  animation: cardReveal 0.35s ease-out;
+  position: relative;
+}
+.ghost-bust-card::after {
+  content: '✕';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: rgba(255,255,255,0.55);
+}
+
+.ghost-sc-card {
+  background: rgba(6,95,70,0.88) !important;
+  color: #6ee7b7 !important;
+  border: 2px dashed #10b981 !important;
+  font-size: 1.1rem !important;
+  animation: cardReveal 0.35s ease-out;
+}
+
+.ghost-card-exit {
+  opacity: 0 !important;
+  transform: scale(0.55) translateY(-14px) !important;
+  transition: opacity 0.45s ease, transform 0.45s ease !important;
+}
+
 /* ── Action banner (Freeze / Flip 3 notification) ───────────────────────── */
 .action-banner {
   position: fixed;
