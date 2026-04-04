@@ -919,21 +919,22 @@ input[type="text"]:focus { border-color: var(--gold); }
   #action-area .btn { min-height: 44px; flex: 1; min-width: 100px; }
   #your-turn-label  { width: 100%; text-align: center; }
 
-  /* Event log: sit above action-area, full width */
+  /* Event log: static flow at the bottom of the page, no longer floating */
   #event-log {
-    bottom: 5rem;
-    left: 0.75rem;
-    right: 0.75rem;
+    position: static;
     width: auto;
     max-width: none;
+    margin: 0 0.75rem 0.75rem;
+    border-radius: 8px;
+    box-shadow: none;
   }
-  #event-log-body { max-height: 160px; }
+  #event-log-body { max-height: 200px; }
 
-  /* Connection status: bottom-left so it doesn't clash with event log */
+  /* Connection status: bottom-right (no event log clash) */
   #conn-status {
     bottom: 0.5rem;
-    left: 0.75rem;
-    right: auto;
+    right: 0.75rem;
+    left: auto;
   }
 
   /* Targeting box: full-width on mobile */

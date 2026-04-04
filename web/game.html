@@ -99,6 +99,15 @@
     </div>
   </div>
 
+  <!-- Event log (fixed bottom-right on desktop, static at bottom on mobile) -->
+  <div id="event-log" class="hidden">
+    <div id="event-log-header">
+      <span>Log</span>
+      <button id="event-log-toggle" onclick="toggleEventLog()" title="Collapse">−</button>
+    </div>
+    <div id="event-log-body"></div>
+  </div>
+
   <div id="action-area">
     <span id="your-turn-label" class="hidden">Your turn!</span>
     <button id="btn-draw" class="btn btn-primary hidden" onclick="sendAction('draw')">Draw Card</button>
@@ -106,15 +115,6 @@
     <span id="countdown" class="hidden"></span>
     <!-- Shown to non-drawer players while target is being chosen -->
     <p id="targeting-waiting" class="hidden targeting-waiting"></p>
-  </div>
-
-  <!-- Event log (bottom-right) -->
-  <div id="event-log" class="hidden">
-    <div id="event-log-header">
-      <span>Log</span>
-      <button id="event-log-toggle" onclick="toggleEventLog()" title="Collapse">−</button>
-    </div>
-    <div id="event-log-body"></div>
   </div>
 
   <div id="conn-status" class="conn-warn">Connecting...</div>
