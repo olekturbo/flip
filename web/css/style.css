@@ -528,9 +528,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 
 /* Bust overlay on last card */
 .card-bust-marker {
-  background: var(--red) !important;
-  color: #fff !important;
-  font-size: 0.7rem !important;
+  /* Ghost card shows the duplicate — real card stays unstyled */
 }
 
 /* Action area */
