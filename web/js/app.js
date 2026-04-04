@@ -15,7 +15,7 @@ let overlayTimer     = null; // delayed round-end / game-over overlay
 let shownOverlayPhase = null; // which phase the overlay was already shown for
 let countdownInterval = null; // 100ms RAF-style ticker for next-round countdown
 let roundEndedAtClient = null; // Date.now() calibrated to when round ended
-const AUTO_NEXT_MS = 5000;    // must match Go AutoNextRound
+const AUTO_NEXT_MS = 3000;    // must match Go AutoNextRound
 
 // Per-player card reveal state (for Flip 3 stagger)
 const revealProgress = {}; // playerId → currently-visible card count
