@@ -73,6 +73,7 @@
     <span class="header-stat">Round: <span id="hdr-round">—</span></span>
     <span class="header-stat">Deck: <span id="hdr-deck">—</span></span>
     <button class="btn btn-secondary" onclick="show('rules-modal')" style="margin-left:auto">Rules</button>
+    <button id="btn-mute" class="btn btn-secondary" onclick="toggleMute()" title="Toggle sound" style="padding:0.3rem 0.6rem;font-size:1rem">🔊</button>
   </header>
 
   <div id="message-bar">Connecting...</div>
@@ -233,6 +234,7 @@
     </div>
   </div>
 
+  <script src="/js/sounds.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

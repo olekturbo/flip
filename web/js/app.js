@@ -28,6 +28,7 @@ if (!roomID) {
 window.addEventListener('DOMContentLoaded', () => {
   el('hdr-room-id').textContent = roomID;
   el('share-url').value = window.location.href;
+  initMuteButton();
 
   if (!playerName) {
     show('name-modal');
@@ -149,12 +150,14 @@ function render() {
     // Guard with prev so reconnecting to an existing game doesn't replay animations.
     if (prev && newCount > 0 && revealProgress[p.id] === undefined) {
       startCardReveals(p, prevCount);
+      if (newCount === 1) sndCardDraw();
     }
 
     // Flip 3 banner: 2+ new cards signals the target was hit.
     // Guard with prev to avoid false positives on reconnect.
     if (prev && newCount >= 2) {
       showActionBanner(`🎲 ${p.name} — Flip 3!`, 'rgba(194,65,12,0.95)');
+      sndFlip3();
     }
 
     // Status transition animations (run after grid is in DOM, hence setTimeout)
@@ -162,6 +165,7 @@ function render() {
       const pid = p.id, pname = p.name;
       if (p.status === 'frozen') {
         showActionBanner(`❄️ ${pname} was frozen!`, 'rgba(29,78,216,0.95)');
+        sndFreeze();
         setTimeout(() => {
           const panel = document.querySelector(`[data-player-id="${pid}"]`);
           if (panel) {
@@ -173,6 +177,7 @@ function render() {
       if (p.status === 'stopped') {
         const pts = p.roundScore != null ? p.roundScore : '?';
         showActionBanner(`🏦 ${pname} stopped — ${pts} pts`, 'rgba(22,101,52,0.95)');
+        sndStop();
       }
       if (p.status === 'busted') {
         // If Flip 3 stagger is in progress, delay banner/shake to coincide with
@@ -187,6 +192,7 @@ function render() {
           : `💥 ${pname} BUSTED!`;
         setTimeout(() => {
           showActionBanner(bustLabel, 'rgba(185,28,28,0.95)');
+          sndBust();
           const panel = document.querySelector(`[data-player-id="${pid}"]`);
           if (panel) {
             panel.classList.add('just-busted');
@@ -214,6 +220,7 @@ function render() {
     // Flip 7 bonus earned
     if (prev && p.roundBonus > 0 && !prev.roundBonus) {
       showActionBanner(`🎉 ${p.name} — FLIP 7! +${p.roundBonus} bonus!`, 'rgba(120,53,15,0.97)');
+      sndFlip7();
     }
 
     // Second Chance consumed: hasSecondChance flipped true→false while still active
@@ -224,6 +231,7 @@ function render() {
       const savedVal = scMatch ? scMatch[1] : '?';
 
       showActionBanner(`🛡️ ${pname} — 2nd Chance saved from ${savedVal}!`, 'rgba(5,120,80,0.95)');
+      sndSecondChance();
 
       // Inject ghost cards into the player's hand so the event is clear visually.
       setTimeout(() => {
@@ -412,6 +420,7 @@ function renderPlaying() {
     if (pa.drawerID === playerID) {
       const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
+      sndActionCard();
       el('targeting-card-name').textContent = `You drew: ${cardLabel}`;
       el('targeting-buttons').innerHTML = (pa.validTargetIDs || []).map(tid => {
         const tp = gameState.players.find(p => p.id === tid);
@@ -525,6 +534,7 @@ function showActionBanner(text, bgColor) {
 function renderRoundEnd() {
   show('round-end-overlay');
   el('round-end-title').textContent = `Round ${gameState.roundNumber} Over`;
+  sndRoundEnd();
 
   const tbody = el('round-score-body');
   tbody.innerHTML = gameState.players.map(p => {
