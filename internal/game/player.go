@@ -31,26 +31,39 @@ type Player struct {
 
 // RoundScore computes the round score from the player's cards:
 //  1. Sum of all number card values.
-//  2. Apply ×2 multiplier if held.
-//  3. Add +modifier values.
+//  2. Apply ×2 multiplier if held (×2 and ÷2 cancel each other out).
+//  3. Apply ÷2 halving if held (integer division, minimum 0).
+//  4. Add +modifier and subtract -modifier values.
 func (p *Player) RoundScore() int {
 	numSum := 0
 	addSum := 0
 	hasMul := false
+	hasDiv := false
 	for _, c := range p.Cards {
 		switch c.Type {
 		case CardTypeNumber:
 			numSum += c.Value
 		case CardTypeModifierAdd:
 			addSum += c.Value
+		case CardTypeModifierSub:
+			addSum += c.Value // Value is already negative
 		case CardTypeModifierMul:
 			hasMul = true
+		case CardTypeModifierDiv:
+			hasDiv = true
 		}
 	}
-	if hasMul {
-		return numSum*2 + addSum
+	// ×2 and ÷2 cancel each other out
+	if hasMul && !hasDiv {
+		numSum *= 2
+	} else if hasDiv && !hasMul {
+		numSum /= 2
 	}
-	return numSum + addSum
+	score := numSum + addSum
+	if score < 0 {
+		score = 0
+	}
+	return score
 }
 
 // HasNumber returns true if the player already holds a number card with value v.

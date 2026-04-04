@@ -13,12 +13,13 @@ Rules are available in-game via the **Rules** button.
 
 ## Rules Summary
 
-### Deck — 94 cards
+### Deck — 100 cards
 | Type | Cards |
 |------|-------|
 | Number cards | 0–12; card N appears N times (0 appears once) → **79 cards** |
 | Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance → **9 cards** |
-| Modifier cards | +2, +4, +6, +8, +10, ×2 → **6 cards** |
+| Positive modifier cards | +2, +4, +6, +8, +10, ×2 → **6 cards** |
+| Negative modifier cards | -2, -4, -6, -8, -10, ÷2 → **6 cards** |
 
 The deck carries over between rounds and is only reshuffled when it runs out.
 
@@ -38,18 +39,20 @@ When drawn you **choose any active player** to receive its effect (including you
 | Card | Effect |
 |------|--------|
 | **Freeze** | Target banks their points and exits the round immediately. |
-| **Flip 3** | Target draws 3 cards one at a time. All 3 are always drawn even if the target busts mid-sequence. Action cards drawn during Flip 3 resolve interactively after all 3 are drawn. Only Flip 7 or an empty deck stops the sequence early. |
-| **Second Chance** | Target holds this card. If they would bust, discard both the duplicate and this card — they survive and **their turn continues normally**. Only one per player at a time. |
+| **Flip 3** | Target draws 3 cards one at a time. The sequence stops early on a bust or Flip 7. Action cards drawn during Flip 3 resolve interactively after all draws complete. |
+| **Second Chance** | Target holds this card. If they would bust, discard both the duplicate and this card — they survive but **their turn ends**. Only one per player at a time. |
 
 ### Modifier Cards
 | Card | Effect |
 |------|--------|
 | **+2 / +4 / +6 / +8 / +10** | Added to your final round score. |
-| **×2** | Doubles your number-card total first; +modifiers are added on top. |
+| **×2** | Doubles your number-card total; modifiers applied on top. |
+| **-2 / -4 / -6 / -8 / -10** | Subtracted from your final round score. |
+| **÷2** | Halves your number-card total (rounded down); modifiers applied on top. Cancels out with ×2 if both held. |
 
 ### Scoring
-`score = (sum of number cards × 2 if ×2 held) + sum of +modifiers`  
-Busted players score **0**. The Flip 7 bonus (+15) is added after modifiers.
+`score = (sum of number cards [×2 or ÷2 if held; cancel each other]) + sum of +modifiers - sum of -modifiers`  
+Minimum round score is **0**. Busted players score **0**. The Flip 7 bonus (+15) is added after modifiers.
 
 ### Flip 7 Bonus 🎉
 Collect **7 unique number cards** → round ends immediately for everyone.  

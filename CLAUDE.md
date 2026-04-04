@@ -11,7 +11,7 @@ Keep the HTML description **exactly in sync** with the actual Go logic in `inter
 Specific sections to watch:
 | Game change | HTML section to update |
 |---|---|
-| Deck composition (`deck.go`) | "Deck — 94 cards" |
+| Deck composition (`deck.go`) | "Deck — 100 cards" |
 | Scoring formula (`player.go RoundScore`) | "Modifier Cards", "Scoring" |
 | Action card effects (`game.go resolveActionWithTarget`) | "Action Cards" |
 | Flip 7 bonus (`game.go triggerFlip7 / endRound`) | "Flip 7 Bonus" |
@@ -24,10 +24,11 @@ Always update `README.md` as well when rules or architecture change.
 
 These are the official rules this implementation is designed to match. Deviations are noted.
 
-### Deck — 94 cards
+### Deck — 100 cards
 - **Number cards (79):** values 0–12; card N appears N times (0 appears once).
 - **Action cards (9):** 3× Freeze, 3× Flip 3, 3× Second Chance.
-- **Modifier cards (6):** +2, +4, +6, +8, +10, ×2.
+- **Positive modifier cards (6):** +2, +4, +6, +8, +10, ×2.
+- **Negative modifier cards (6):** -2, -4, -6, -8, -10, ÷2.
 - Deck carries over between rounds; reshuffled only when empty.
 
 ### Turn
@@ -37,7 +38,7 @@ Draw one card OR stay. Action cards require choosing a target (any active player
 Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 
 ### Second Chance
-- When used to prevent a bust: discard both SC and duplicate; **turn continues normally** (player may draw again or stay). This applies during Flip 3 as well — the remaining Flip 3 draws continue.
+- When used to prevent a bust: discard both SC and duplicate; **turn ends** (play passes to next player). During Flip 3, the remaining Flip 3 draws are also cancelled.
 - Only one SC per player at a time.
 
 ### Flip 3
@@ -46,7 +47,8 @@ Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 - Action cards drawn during Flip 3 are deferred and resolved interactively after all draws complete.
 
 ### Scoring
-`(sum of number cards [× 2 if ×2 held]) + sum of +modifiers`
+`(sum of number cards [×2 or ÷2 if held; cancel each other]) + sum of +modifiers - sum of -modifiers`
+Minimum round score is 0.
 
 ### Flip 7 bonus
 7 unique number cards → round ends immediately; player scores +15 on top of their normal score; other active players bank their current hand.

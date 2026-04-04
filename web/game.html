@@ -129,11 +129,12 @@
       </section>
 
       <section>
-        <h3>Deck — 94 cards</h3>
+        <h3>Deck — 100 cards</h3>
         <ul>
           <li><strong>Number cards (79):</strong> values 0–12; card N appears N times (0 appears once).</li>
           <li><strong>Action cards (9):</strong> 3× Freeze, 3× Flip 3, 3× Second Chance.</li>
-          <li><strong>Modifier cards (6):</strong> +2, +4, +6, +8, +10, ×2.</li>
+          <li><strong>Positive modifier cards (6):</strong> +2, +4, +6, +8, +10, ×2.</li>
+          <li><strong>Negative modifier cards (6):</strong> -2, -4, -6, -8, -10, ÷2.</li>
         </ul>
         <p class="rules-note">The deck is <em>not</em> reshuffled between rounds — it carries over. It's only reshuffled when it runs out.</p>
       </section>
@@ -187,8 +188,17 @@
           </div>
           <div class="rules-card-row">
             <span class="card card-modifier_mul">×2</span>
-            <span><strong>Doubles</strong> your number-card total first, then +modifiers are added on top.<br>
-              <em>Example: numbers sum = 19 → ×2 = 38 → +10 modifier = 48 pts</em></span>
+            <span><strong>Doubles</strong> your number-card total first, then modifiers are applied on top.<br>
+              <em>Example: numbers = 19 → ×2 = 38 → +10 = 48 pts</em></span>
+          </div>
+          <div class="rules-card-row">
+            <span class="card card-modifier_sub">-N</span>
+            <span><strong>-2 / -4 / -6 / -8 / -10</strong> — subtracted from your final round score (minimum 0).</span>
+          </div>
+          <div class="rules-card-row">
+            <span class="card card-modifier_div">÷2</span>
+            <span><strong>Halves</strong> your number-card total (rounded down), then modifiers are applied on top. Cancels out with ×2 if both held.<br>
+              <em>Example: numbers = 18 → ÷2 = 9 → -4 = 5 pts</em></span>
           </div>
         </div>
       </section>
@@ -206,8 +216,9 @@
         <h3>Scoring</h3>
         <ol>
           <li>Sum of your number cards.</li>
-          <li>Apply ×2 multiplier (if held).</li>
-          <li>Add +modifier cards.</li>
+          <li>Apply ×2 or ÷2 (if held; they cancel each other out).</li>
+          <li>Add +modifier cards and subtract -modifier cards.</li>
+          <li>Score cannot go below <strong>0</strong>.</li>
           <li>Busted players score <strong>0</strong>.</li>
         </ol>
       </section>

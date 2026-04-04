@@ -360,6 +360,8 @@ input[type="text"]:focus { border-color: var(--gold); }
 .card-second_chance { background: #065f46; color: #6ee7b7; font-size: 0.6rem; text-align: center; line-height: 1.2; }
 .card-modifier_add  { background: #6d28d9; color: #ede9fe; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 .card-modifier_mul  { background: #b45309; color: #fef3c7; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
+.card-modifier_sub  { background: #991b1b; color: #fecaca; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
+.card-modifier_div  { background: #7c2d12; color: #fed7aa; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 
 /* ─── Target selection overlay ──────────────────────────────────────────────── */
 .targeting-overlay {
