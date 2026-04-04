@@ -1,4 +1,4 @@
-Compare the actual game mechanics in `internal/game/` against the rules modal in `web/game.html` (the block between `<!-- Rules modal -->` and `<script src="/js/app.js">`).
+Compare the actual game mechanics in `internal/game/` against the rules modal in `web/game.html` (the block between `<!-- Rules modal -->` and rules in `web/rules.html` and `<script src="/js/app.js">`).
 
 For each discrepancy found, update the HTML to match the code — not the other way around. The code is the source of truth.
 
