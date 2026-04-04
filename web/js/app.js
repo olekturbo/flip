@@ -13,8 +13,9 @@ let reconnectDelay   = 1000;
 let reconnectTimer   = null; // handle for the scheduled reconnect setTimeout
 let overlayTimer     = null; // delayed round-end / game-over overlay
 let shownOverlayPhase = null; // which phase the overlay was already shown for
-let countdownInterval = null; // client-side 1s ticker for next-round countdown
-let countdownSecs     = 0;
+let countdownInterval = null; // 100ms RAF-style ticker for next-round countdown
+let roundEndedAtClient = null; // Date.now() calibrated to when round ended
+const AUTO_NEXT_MS = 5000;    // must match Go AutoNextRound
 
 // Per-player card reveal state (for Flip 3 stagger)
 const revealProgress = {}; // playerId → currently-visible card count
@@ -314,6 +315,8 @@ function render() {
       // If we were waiting to show an overlay, cancel it — round resumed
       if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
       shownOverlayPhase = null;
+      roundEndedAtClient = null;
+      clearCountdown();
       renderPlaying();
       break;
     }
@@ -321,9 +324,17 @@ function render() {
     case 'game_over': {
       const phase = gameState.phase;
       const renderFn = phase === 'round_end' ? renderRoundEnd : renderGameOver;
+
+      // Calibrate client-side round-end timestamp once per round transition.
+      // Use server's nextRoundIn to back-calculate when the round actually ended.
+      if (phase === 'round_end' && roundEndedAtClient === null) {
+        const elapsed = (AUTO_NEXT_MS / 1000 - (gameState.nextRoundIn || 0)) * 1000;
+        roundEndedAtClient = Date.now() - Math.max(0, elapsed);
+        startCountdownTicker();
+      }
+
       if (shownOverlayPhase === phase) {
-        // Already shown — just refresh content (e.g. countdown tick)
-        renderFn();
+        // Already shown — overlay is visible, countdown ticks independently
       } else {
         if (overlayTimer) clearTimeout(overlayTimer);
         // If a Flip 3 stagger is in progress, wait for it to finish so the
@@ -556,28 +567,25 @@ function renderRoundEnd() {
     </tr>`;
   }).join('');
 
-  // Sync server value; start or keep client-side 1s ticker
-  if (gameState.nextRoundIn > 0) {
-    countdownSecs = gameState.nextRoundIn;
-    updateCountdownDisplay();
-    if (!countdownInterval) {
-      countdownInterval = setInterval(() => {
-        countdownSecs = Math.max(0, countdownSecs - 1);
-        updateCountdownDisplay();
-      }, 1000);
-    }
-  } else {
-    clearCountdown();
-    el('round-end-countdown').textContent = 'Starting next round…';
-  }
+  updateCountdownDisplay();
+}
+
+function startCountdownTicker() {
+  if (countdownInterval) return; // already running
+  countdownInterval = setInterval(updateCountdownDisplay, 100);
 }
 
 function updateCountdownDisplay() {
   const el2 = el('round-end-countdown');
   if (!el2) return;
-  if (countdownSecs > 0) {
-    el2.textContent = `Next round in ${countdownSecs}…`;
-    el2.dataset.secs = countdownSecs;
+  if (roundEndedAtClient === null) {
+    el2.textContent = '';
+    return;
+  }
+  const remaining = AUTO_NEXT_MS - (Date.now() - roundEndedAtClient);
+  const secs = Math.ceil(remaining / 1000);
+  if (secs > 0) {
+    el2.textContent = `Next round in ${secs}…`;
   } else {
     el2.textContent = 'Starting next round…';
   }
@@ -585,7 +593,7 @@ function updateCountdownDisplay() {
 
 function clearCountdown() {
   if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
-  countdownSecs = 0;
+  roundEndedAtClient = null;
 }
 
 // ── Game over ─────────────────────────────────────────────────────────────────
