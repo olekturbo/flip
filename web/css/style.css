@@ -761,7 +761,16 @@ input[type="text"]:focus { border-color: var(--gold); }
 
 .deck-layer-3 { top: 0;   left: 6px; transform: rotate(-4deg); opacity: 0.55; }
 .deck-layer-2 { top: 3px; left: 3px; transform: rotate(-2deg); opacity: 0.75; }
-.deck-layer-1 { top: 6px; left: 0;   transform: rotate(0deg);  opacity: 1;   }
+.deck-layer-1 { top: 6px; left: 0;   transform: rotate(0deg);  opacity: 1; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; }
+
+.deck-brand {
+  font-size: 0.38rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.03em;
+  user-select: none;
+  text-transform: lowercase;
+}
 
 .deck-pile-count {
   font-size: 0.75rem;
