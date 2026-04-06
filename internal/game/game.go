@@ -97,11 +97,11 @@ type Game struct {
 	events         []string
 }
 
-// logEvent appends a message to the event history (capped at 80 entries).
+// logEvent appends a message to the event history (capped at 300 entries, oldest dropped first).
 func (g *Game) logEvent(format string, args ...interface{}) {
 	g.events = append(g.events, fmt.Sprintf(format, args...))
-	if len(g.events) > 80 {
-		g.events = g.events[len(g.events)-80:]
+	if len(g.events) > 300 {
+		g.events = g.events[len(g.events)-300:]
 	}
 }
 

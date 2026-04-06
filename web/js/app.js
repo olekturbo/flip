@@ -8,6 +8,7 @@ let playerID    = '';
 let isHost      = false;
 let gameState        = null;
 let prevPlayers      = [];   // previous player states for animation diffs
+let prevMessage      = '';   // previous gameState.message for change detection
 let ws               = null;
 let reconnectDelay   = 1000;
 let reconnectTimer   = null; // handle for the scheduled reconnect setTimeout
@@ -303,7 +304,40 @@ function render() {
     }
   });
 
-  // ── 5. Persist snapshot (includes status for next diff) ───────────────────
+  // ── 5. Thief discarded with no effect — ghost card animation ─────────────
+  const curMsg = gameState.message || '';
+  if (curMsg !== prevMessage) {
+    // Matches: "X drew Thief — no card to steal, discarded."
+    //          "X drew Thief — no valid target, discarded."
+    //          "X dealt Thief — no valid target, discarded."
+    //          "X used Thief on Y — nothing to steal, discarded."
+    const thiefDiscardMatch = curMsg.match(/^(.+?) (?:drew|dealt|used) Thief(?: on .+?)? — (?:no card to steal|no valid target|nothing to steal), discarded/);
+    if (thiefDiscardMatch) {
+      const drawerName = thiefDiscardMatch[1];
+      const drawerPlayer = gameState.players.find(p => p.name === drawerName);
+      if (drawerPlayer) {
+        showActionBanner(`🃏 ${drawerName} — Thief discarded (nothing to steal)`, 'rgba(109,40,217,0.95)');
+        setTimeout(() => {
+          const panel = document.querySelector(`[data-player-id="${drawerPlayer.id}"]`);
+          if (!panel) return;
+          const cardsEl = panel.querySelector('.player-cards');
+          if (!cardsEl) return;
+          const ghostThief = document.createElement('div');
+          ghostThief.className = 'card ghost-thief-card';
+          ghostThief.textContent = '🃏';
+          ghostThief.title = 'Thief — nothing to steal, discarded';
+          cardsEl.appendChild(ghostThief);
+          setTimeout(() => {
+            ghostThief.classList.add('ghost-card-exit');
+            setTimeout(() => ghostThief.remove(), 480);
+          }, 2500);
+        }, 80);
+      }
+    }
+  }
+
+  // ── 6. Persist snapshot (includes status for next diff) ───────────────────
+  prevMessage = curMsg;
   prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0 }));
 
   // Phase-specific UI
@@ -753,6 +787,7 @@ function toggleEventLog() {
   const toggle = el('event-log-toggle');
   if (body)   body.style.display   = eventLogCollapsed ? 'none' : '';
   if (toggle) toggle.textContent   = eventLogCollapsed ? '+' : '−';
+  if (body && !eventLogCollapsed)  body.scrollTop = body.scrollHeight;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

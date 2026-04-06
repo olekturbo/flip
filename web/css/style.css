@@ -853,6 +853,15 @@ input[type="text"]:focus { border-color: var(--gold); }
   animation: cardReveal 0.5s ease-out;
 }
 
+.ghost-thief-card {
+  background: rgba(109,40,217,0.88) !important;
+  color: #e9d5ff !important;
+  border: 2px dashed #a78bfa !important;
+  font-size: 1.05rem !important;
+  text-decoration: line-through !important;
+  animation: cardReveal 0.5s ease-out;
+}
+
 .ghost-card-exit {
   opacity: 0 !important;
   transform: scale(0.55) translateY(-14px) !important;
