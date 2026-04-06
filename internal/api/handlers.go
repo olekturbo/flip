@@ -2,19 +2,59 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 
 	"nhooyr.io/websocket"
 
 	"flip7/internal/hub"
 )
 
+// assetVersion computes an 8-hex-char hash of all embedded JS and CSS files.
+// It changes whenever any asset changes, so versioned URLs bust browser caches.
+func assetVersion(webFS fs.FS) string {
+	hash := sha256.New()
+	for _, path := range []string{"css/style.css", "js/sounds.js", "js/app.js"} {
+		if data, err := fs.ReadFile(webFS, path); err == nil {
+			hash.Write(data)
+		}
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))[:8]
+}
+
 // NewRouter builds and returns the HTTP mux for the server.
 // webFS is an fs.FS rooted at the directory containing index.html, game.html, etc.
 func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
+	// Build a version string that changes whenever JS/CSS changes.
+	ver := assetVersion(webFS)
+	log.Printf("asset version: %s", ver)
+
+	// Replacer that stamps ?v=VER onto every asset URL inside HTML files.
+	replacer := strings.NewReplacer(
+		`href="/css/style.css"`, fmt.Sprintf(`href="/css/style.css?v=%s"`, ver),
+		`src="/js/sounds.js"`, fmt.Sprintf(`src="/js/sounds.js?v=%s"`, ver),
+		`src="/js/app.js"`, fmt.Sprintf(`src="/js/app.js?v=%s"`, ver),
+	)
+
+	// serveHTML reads an HTML file, injects versioned asset URLs, and responds
+	// with Cache-Control: no-cache so browsers always revalidate the HTML itself.
+	serveHTML := func(w http.ResponseWriter, r *http.Request, name string) {
+		data, err := fs.ReadFile(webFS, name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		content := replacer.Replace(string(data))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		fmt.Fprint(w, content)
+	}
+
 	mux := http.NewServeMux()
 
 	// REST: create a new room and return its ID.
@@ -67,13 +107,24 @@ func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
 		log.Printf("ws disconnected room=%s remote=%s", roomID, r.RemoteAddr)
 	})
 
-	// Serve game.html for any /game/{roomID} path.
+	// HTML pages — served with injected versioned asset URLs and no-cache.
 	mux.HandleFunc("GET /game/{roomID}", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFileFS(w, r, webFS, "game.html")
+		serveHTML(w, r, "game.html")
 	})
-
-	// Serve static assets (index.html, css/, js/).
-	mux.Handle("/", http.FileServerFS(webFS))
+	mux.HandleFunc("GET /rules.html", func(w http.ResponseWriter, r *http.Request) {
+		serveHTML(w, r, "rules.html")
+	})
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			serveHTML(w, r, "index.html")
+			return
+		}
+		// JS and CSS: long-lived immutable cache (versioned URLs guarantee busting).
+		if strings.HasPrefix(r.URL.Path, "/js/") || strings.HasPrefix(r.URL.Path, "/css/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		http.FileServerFS(webFS).ServeHTTP(w, r)
+	})
 
 	return mux
 }
