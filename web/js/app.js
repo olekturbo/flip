@@ -226,10 +226,12 @@ function render() {
     }
 
     // Second Chance consumed: hasSecondChance flipped true→false while player
-    // was already active (guards against false positive on round transition where
-    // ResetForRound zeroes SC while prevPlayers still holds the old value).
+    // was already active and within the same round (guards against false positive
+    // on round transition where ResetForRound zeroes SC while prevPlayers still
+    // holds the old value from the previous round).
     if (prev && prev.hasSecondChance && !p.hasSecondChance &&
-        prevStat === 'active' && p.status === 'active') {
+        prevStat === 'active' && p.status === 'active' &&
+        prev.roundNumber === gameState.roundNumber) {
       const pid = p.id, pname = p.name;
       // Parse the duplicate value from the message (e.g. "drew 9 (duplicate!)")
       const scMatch = gameState.message.match(/drew (\d+) .*duplicate/);
@@ -338,7 +340,7 @@ function render() {
 
   // ── 6. Persist snapshot (includes status for next diff) ───────────────────
   prevMessage = curMsg;
-  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0 }));
+  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0, roundNumber: gameState.roundNumber }));
 
   // Phase-specific UI
   hideAllOverlays();
