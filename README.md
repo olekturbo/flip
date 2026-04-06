@@ -14,6 +14,20 @@ A faithful digital adaptation of the **Flip 7** card game by [The Op](https://th
 
 Rules are available in-game via the **Rules** button.
 
+## Screenshots
+
+| Home | Lobby |
+|:----:|:-----:|
+| [![Home page](screenshots/01_home.png)](screenshots/01_home.png) | [![Lobby with 3 players](screenshots/03_lobby_three_players.png)](screenshots/03_lobby_three_players.png) |
+
+| Game board | Action card — Flip 3 |
+|:----------:|:--------------------:|
+| [![Game start](screenshots/04_game_start_alice_pov.png)](screenshots/04_game_start_alice_pov.png) | [![Flip 3 target selection](screenshots/07_mid_game_alice.png)](screenshots/07_mid_game_alice.png) |
+
+| Mid-round | Rules |
+|:---------:|:-----:|
+| [![Mid-game](screenshots/08_mid_game_bob.png)](screenshots/08_mid_game_bob.png) | [![Rules modal](screenshots/12_rules_modal.png)](screenshots/12_rules_modal.png) |
+
 ## Rules Summary
 
 ### Deck — 103 cards
