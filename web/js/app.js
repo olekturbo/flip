@@ -17,6 +17,7 @@ let shownOverlayPhase = null; // which phase the overlay was already shown for
 let countdownInterval = null; // 100ms RAF-style ticker for next-round countdown
 let roundEndedAtClient = null; // Date.now() calibrated to when round ended
 const AUTO_NEXT_MS = 4000;    // must match Go AutoNextRound
+let animBlockedUntil = 0;     // epoch ms — block turn controls until animations finish
 
 // Per-player card reveal state (for Flip 3 stagger)
 const revealProgress = {}; // playerId → currently-visible card count
@@ -188,6 +189,7 @@ function render() {
         const bustDelay = revealProgress[pid] !== undefined
           ? 500 + (newCount - 1) * 950 + 80   // wait for last stagger card
           : 80;
+        blockTurnFor(bustDelay + 1800); // hold next player's controls until bust is visible
         const bustVal = bustCard && bustCard.type === 'number' ? bustCard.value : null;
         const bustLabel = bustVal !== null
           ? `💥 ${pname} BUSTED — duplicate ${bustVal}!`
@@ -494,14 +496,21 @@ function renderPlaying() {
       show('targeting-overlay');
     } else {
       const drawer = gameState.players.find(p => p.id === pa.drawerID);
+      const waitLabelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
+      const waitCardLabel = waitLabelMap[pa.card.type] || pa.card.type;
       el('targeting-waiting').textContent =
-        `Waiting for ${drawer ? esc(drawer.name) : 'a player'} to choose a target…`;
+        `Waiting for ${drawer ? esc(drawer.name) : 'a player'} to play ${waitCardLabel}…`;
       show('targeting-waiting');
     }
     return;
   }
 
   if (myTurn) {
+    const remaining = animBlockedUntil - Date.now();
+    if (remaining > 0) {
+      setTimeout(flushTurnControls, remaining + 50);
+      return;
+    }
     show('your-turn-label');
     show('btn-draw');
     show('btn-stop');
@@ -555,6 +564,9 @@ function startCardReveals(player, prevCount) {
   const STAGGER    = 950;  // ms between cards
   const START      = 500;  // brief pause so the banner/message can land first
 
+  // Block next-player controls until all staggered cards are revealed.
+  blockTurnFor(START + (totalNew - 1) * STAGGER + 800);
+
   revealProgress[player.id] = prevCount;
   revealTimers[player.id]   = [];
 
@@ -583,6 +595,31 @@ function startCardReveals(player, prevCount) {
 
     revealTimers[player.id].push(handle);
   }
+}
+
+// ── Animation turn-blocking ───────────────────────────────────────────────────
+
+// Prevent the current player's action controls from appearing until ongoing
+// animations (Flip 3 stagger, bust shake) have finished.
+function blockTurnFor(ms) {
+  animBlockedUntil = Math.max(animBlockedUntil, Date.now() + ms);
+}
+
+// Called by setTimeout when a block expires — shows controls if still myTurn.
+function flushTurnControls() {
+  if (!gameState || gameState.phase !== 'playing') return;
+  if (gameState.pendingAction) return;
+  const cpIdx = gameState.currentPlayerIndex;
+  const cp = cpIdx >= 0 ? gameState.players[cpIdx] : null;
+  if (!cp || cp.id !== playerID) return;
+  const remaining = animBlockedUntil - Date.now();
+  if (remaining > 0) {
+    setTimeout(flushTurnControls, remaining + 50);
+    return;
+  }
+  show('your-turn-label');
+  show('btn-draw');
+  show('btn-stop');
 }
 
 // ── Action banner ─────────────────────────────────────────────────────────────
