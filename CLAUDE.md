@@ -26,6 +26,19 @@ Specific sections to watch:
 | Win score constant (`WinScore`) | "Winning" in HTML/RULES/README + `round_and_game.feature` |
 | Bust logic | "Busting" in HTML/RULES/README + `bust.feature` |
 
+## Card visibility rule (MANDATORY)
+
+Every action card that resolves successfully **must remain visible in a player's hand** on the board — as a styled card element, not just a banner or ghost animation. This applies to all existing and future card types:
+
+| Card | Stays in whose hand |
+|---|---|
+| Freeze | Target's hand (blue marker — frozen status) |
+| Flip 3 | Target's hand (orange marker) |
+| Second Chance | Target's hand until consumed (green marker; ghost animation on use) |
+| Thief (successful steal) | Drawer's hand (purple marker) |
+
+When adding a new action card: ensure `applyXxx` adds the card to the relevant player's `Cards` slice (not `UsedCards`) so it renders automatically via `card-{type}` CSS. Only discard to `UsedCards` when the card has **no effect** (no valid target etc.) — in that case a ghost animation should be shown instead.
+
 ## Tests sync rule (MANDATORY)
 
 Whenever you modify **any game mechanic** in `internal/game/` — or add a new one — you **must** also update the tests in `internal/game/*_test.go`.
