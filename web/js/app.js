@@ -156,11 +156,20 @@ function render() {
       if (newCount === 1) sndCardDraw();
     }
 
-    // Flip 3 banner: 2+ new cards signals the target was hit.
+    // Multi-card arrival banner: 2+ new cards is either Flip 3 or a Thief steal
+    // (steal adds stolen card + Thief card itself). Distinguish by card type.
     // Guard with prev to avoid false positives on reconnect.
     if (prev && newCount >= 2) {
-      showActionBanner(`🎲 ${p.name} — Flip 3!`, 'rgba(194,65,12,0.95)');
-      sndFlip3();
+      const newCards = p.cards.slice(prevCount);
+      if (newCards.some(c => c.type === 'thief')) {
+        const stolen = newCards.find(c => c.type === 'number');
+        const stolenLabel = stolen != null ? stolen.value : '?';
+        showActionBanner(`🃏 ${p.name} — stole ${stolenLabel}!`, 'rgba(109,40,217,0.95)');
+        sndThief();
+      } else {
+        showActionBanner(`🎲 ${p.name} — Flip 3!`, 'rgba(194,65,12,0.95)');
+        sndFlip3();
+      }
     }
 
     // Status transition animations (run after grid is in DOM, hence setTimeout)
@@ -470,6 +479,14 @@ function renderPlaying() {
 
   if (pa) {
     if (pa.drawerID === playerID) {
+      // If a Flip 3 stagger is still animating for the drawer's cards, wait until
+      // all cards are visually revealed before showing the targeting overlay.
+      if (revealProgress[pa.drawerID] !== undefined) {
+        hide('targeting-overlay');
+        hide('targeting-waiting');
+        return;
+      }
+
       const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
       pa.card.type === 'thief' ? sndThief() : sndActionCard();
@@ -495,6 +512,12 @@ function renderPlaying() {
       }
       show('targeting-overlay');
     } else {
+      // Also delay the "waiting" notice until the drawer's cards are fully revealed.
+      if (revealProgress[pa.drawerID] !== undefined) {
+        hide('targeting-overlay');
+        hide('targeting-waiting');
+        return;
+      }
       const drawer = gameState.players.find(p => p.id === pa.drawerID);
       const waitLabelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
       const waitCardLabel = waitLabelMap[pa.card.type] || pa.card.type;
@@ -590,7 +613,13 @@ function startCardReveals(player, prevCount) {
         }
       }, 70);
 
-      if (i === totalNew - 1) delete revealProgress[player.id];
+      if (i === totalNew - 1) {
+        delete revealProgress[player.id];
+        // If a pending action was waiting on this stagger, now show the overlay.
+        if (gameState && gameState.pendingAction) {
+          setTimeout(renderPlaying, 80);
+        }
+      }
     }, START + i * STAGGER);
 
     revealTimers[player.id].push(handle);
