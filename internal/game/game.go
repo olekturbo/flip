@@ -1085,7 +1085,7 @@ func (g *Game) applyThiefSteal(thief, victim *Player, stolenCard, thiefCard Card
 		}
 	}
 	thief.Cards = append(thief.Cards, stolenCard)
-	g.UsedCards = append(g.UsedCards, thiefCard)
+	thief.Cards = append(thief.Cards, thiefCard)
 	g.logEvent("%s stole %s from %s", thief.Name, stolenCard.Name, victim.Name)
 	g.Message = fmt.Sprintf("%s used Thief — stole %s from %s!", thief.Name, stolenCard.Name, victim.Name)
 	if thief.UniqueNumberCount() == 7 {
