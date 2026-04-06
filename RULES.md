@@ -1,111 +1,82 @@
----
-name: Flip 7 — correct game rules
-description: Complete, accurate Flip 7 rules to use when rewriting the game logic
-type: project
----
+# Flip 7 — Rules
 
-# Flip 7 — Correct Rules
-
-**Why:** The initial implementation used simplified/wrong rules. Use these for the next rewrite.
-**How to apply:** Replace all game logic in `internal/game/` with the rules below.
+A faithful digital adaptation of the **Flip 7** card game by [The Op](https://theop.games/pages/flip-7).
 
 ---
 
-## Deck (94 cards total)
+## Deck — 103 cards
 
-### Number cards (79 total)
-- Value N = N copies in the deck
-- 0 → 1 card, 1 → 1 card, 2 → 2 cards, 3 → 3 cards, … 12 → 12 cards
+| Type | Cards |
+|------|-------|
+| Number cards | 0–12; card N appears N times (0 appears once) → **79 cards** |
+| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief → **12 cards** |
+| Positive modifier cards | +2, +4, +6, +8, +10, ×2 → **6 cards** |
+| Negative modifier cards | -2, -4, -6, -8, -10, ÷2 → **6 cards** |
 
-### Action cards
-- Freeze
-- Flip Three
-- Second Chance
-
-### Modifier cards
-- +2, +4, +6, +8, +10
-- ×2
+The deck carries over between rounds and is only reshuffled when it runs out.
 
 ---
 
-## Setup each round
-1. Shuffle all 94 cards (NOT reshuffled mid-round; used cards set aside, new deck only when exhausted).
-2. Choose a Dealer (passes left each round).
-3. Dealer deals **one card face-up** to each player (including themselves).
-   - If an Action card comes up during dealing → resolve it immediately, then continue dealing.
-4. After everyone has one starting card, normal play begins.
+## Each Round
 
----
-
-## Turn structure
-- Active player chooses each turn:
-  - **Hit** — draw one card from the top of the deck
-  - **Stay** — bank current points and exit the round (score is locked in)
-- Number cards go in a row (the "line").
-- Action/Modifier cards are placed **above** the line.
-- **Only duplicate Number cards cause a bust** — Action and Modifier cards never cause a bust.
+1. The dealer (rotates each round) deals **one card face-up** to every player starting left of the dealer.
+   - Action cards drawn during dealing are resolved immediately, then dealing continues.
+2. Play passes clockwise from the dealer's left. On your turn:
+   - **Draw** — take one card from the deck; turn passes to the next player.
+   - **Stay** — bank your current points and exit the round.
+3. The round ends when every player has either Stayed, been Frozen, or Busted — or a Flip 7 is achieved.
 
 ---
 
 ## Busting
-- Draw a Number card whose value already appears in your line → **bust**.
-- You score **0** this round and are immediately out for the rest of the round.
-- Exception: **Second Chance** (see below).
+
+Drawing a number you **already hold** = bust. You score **0** this round and are out for the rest of the round. Only duplicate number cards cause busts — action and modifier cards never do.
 
 ---
 
-## Action cards
-When drawn, the active player **chooses any active player** (including themselves) to receive the effect.
-If the drawer is the only active player, they must apply it to themselves.
+## Action Cards
+
+When drawn you **choose any active player** to receive its effect (including yourself). If you're the only active player it targets you automatically.
 
 ### Freeze
-- The chosen player **banks their current points and exits the round** (they do NOT bust; score is kept).
+Target banks their current points and exits the round immediately (they do not bust).
 
-### Flip Three
-- The chosen player must **draw 3 cards one at a time**.
-- Stops early only if they bust or achieve Flip 7.
-- If another Action card appears during Flip Three, resolve it **after all 3 cards are drawn**.
-- All card types (including Action cards) count toward the 3 cards.
+### Flip 3
+Target draws exactly 3 cards one at a time. The sequence stops early only on a **bust** or **Flip 7**. A Second Chance save does **not** stop the sequence — remaining draws continue. Action cards drawn during Flip 3 are deferred and resolved interactively after all draws complete.
 
 ### Second Chance
-- Keep this card in front of you.
-- If you would bust (draw a duplicate number): **discard both the duplicate and the Second Chance card** — you survive, but your **turn ends immediately**.
-- You can only hold **one** Second Chance at a time; if dealt another while holding one, give it to another active player (or discard if none available).
-- All unused Second Chance cards are discarded at end of round.
+Target holds this card. If they would bust, discard both the duplicate and this card — they survive but **their turn ends** (play passes to the next player). During Flip 3, remaining forced draws still continue after a save. Only one Second Chance per player at a time.
+
+### Thief
+Two-stage interaction: first choose a target player, then choose which of their number cards to steal. The chosen card moves from the target's hand to yours. You can only target players who hold at least one number card you don't already hold. If no valid target exists, Thief is discarded with no effect. Stealing the 7th unique number triggers Flip 7 immediately.
 
 ---
 
-## Modifier cards
-- **+2 / +4 / +6 / +8 / +10** — add that amount to your final round score.
-- **×2** — doubles the sum of your Number cards first, then +modifiers are added on top.
-  - Example: number sum = 19, ×2 → 38, then +10 modifier → **48**.
-- Modifiers do **not** count toward the Flip 7 bonus (7 unique Number cards only).
+## Modifier Cards
 
----
-
-## Flip 7 bonus
-- Collect **7 unique Number cards** without busting → round ends immediately for **all players**.
-- The Flip 7 player scores: number total + modifiers + **15 bonus points**.
-- Other active players (not busted, not frozen/stayed) **bank whatever they currently have**.
-
----
-
-## End of round
-- Round ends when all players have either Stayed, been Frozen, or busted — **OR** a Flip 7 is achieved.
-- Used cards are set aside (not reshuffled until the deck runs out mid-round).
-- Dealer role passes to the left.
+| Card | Effect |
+|------|--------|
+| **+2 / +4 / +6 / +8 / +10** | Added to your final round score. |
+| **×2** | Doubles your number-card total; modifiers applied on top. |
+| **-2 / -4 / -6 / -8 / -10** | Subtracted from your final round score. |
+| **÷2** | Halves your number-card total (rounded down); modifiers applied on top. Cancels out with ×2 if both held (net effect: ×1). |
 
 ---
 
 ## Scoring
-1. Sum of Number cards.
-2. Apply ×2 multiplier (if held).
-3. Add +modifier cards.
-4. Busted players score **0**.
+
+`score = (sum of number cards [×2 or ÷2 if held; cancel each other]) + sum of +modifiers − sum of −modifiers`
+
+Minimum round score is **0**. Busted players score **0**. The Flip 7 bonus (+15) is added on top of this formula.
+
+---
+
+## Flip 7 Bonus
+
+Collect **7 unique number cards** → the round ends immediately for everyone. You score your number total + modifiers + **+15 bonus**. All other active players bank whatever they currently hold.
 
 ---
 
 ## Winning
-- Game ends at the **conclusion of a round** in which at least one player reaches **200 points**.
-- Player with the highest total wins.
-- Tied players **share the victory**.
+
+The game ends at the **end of a round** in which one player has the **strictly highest** score at or above **200 points**. If two or more players are tied at 200+, the round ends but the game continues — rounds are played until one player pulls clearly ahead.

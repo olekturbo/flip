@@ -341,7 +341,7 @@ func TestFlip3SecondChanceSavesTarget(t *testing.T) {
 		Flip3Card(),
 		NumberCard(3),
 		NumberCard(5), // duplicate during Flip 3 — SC should save Bob
-		NumberCard(9), // should NOT be drawn (SC stops remaining Flip 3 draws)
+		NumberCard(9), // should still be drawn — SC save does not stop remaining Flip 3 draws
 	)
 	bob.HasSecondChance = true
 
@@ -354,8 +354,8 @@ func TestFlip3SecondChanceSavesTarget(t *testing.T) {
 	if bob.HasSecondChance {
 		t.Error("Bob's Second Chance should be consumed")
 	}
-	if bob.HasNumber(9) {
-		t.Error("card 9 should not be drawn — Flip 3 stops after SC use")
+	if !bob.HasNumber(9) {
+		t.Error("card 9 should be drawn — remaining Flip 3 draws continue after SC save")
 	}
 }
 

@@ -948,8 +948,8 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
 				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d)", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draw ends.", p.Name, card.Value)
-				return nil, true // SC stops the Flip 3 sequence; turn will end normally
+				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draws continue.", p.Name, card.Value)
+				return nil, false // SC saves the bust; remaining Flip 3 draws continue
 			}
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted

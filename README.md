@@ -42,8 +42,9 @@ When drawn you **choose any active player** to receive its effect (including you
 | Card | Effect |
 |------|--------|
 | **Freeze** | Target banks their points and exits the round immediately. |
-| **Flip 3** | Target draws 3 cards one at a time. The sequence stops early on a bust or Flip 7. Action cards drawn during Flip 3 resolve interactively after all draws complete. |
-| **Second Chance** | Target holds this card. If they would bust, discard both the duplicate and this card — they survive but **their turn ends**. Only one per player at a time. |
+| **Flip 3** | Target draws 3 cards one at a time. The sequence stops early on a bust or Flip 7; a Second Chance save does not stop it. Action cards drawn during Flip 3 resolve interactively after all draws complete. |
+| **Second Chance** | Target holds this card. If they would bust, discard both the duplicate and this card — they survive but **their turn ends**. During Flip 3, remaining draws still continue. Only one per player at a time. |
+| **Thief** | Two-stage: choose a player, then choose which of their number cards to steal. If nothing is stealable, the card is discarded. Stealing the 7th unique number triggers Flip 7. |
 
 ### Modifier Cards
 | Card | Effect |
@@ -96,10 +97,11 @@ The test suite has two layers:
 |---|---|
 | `scoring.feature` | All score combinations: plain numbers, ×2, ÷2, +/- modifiers, minimum zero |
 | `bust.feature` | Bust on duplicate number; modifiers never bust |
-| `second_chance.feature` | SC prevents bust, consumed on use, auto-resolves with single target |
+| `second_chance.feature` | SC prevents bust, consumed on use, auto-resolves with single target, Flip 3 draws continue after save |
 | `freeze.feature` | Freeze targeting, auto-target, banked score |
-| `flip3.feature` | 3 forced draws, stops on bust / SC save / Flip 7 |
+| `flip3.feature` | 3 forced draws, stops on bust or Flip 7 only, deferred action resolution |
 | `flip7.feature` | 7 unique numbers ends round, +15 bonus, active players bank |
+| `thief.feature` | Two-stage steal: choose player then card; discarded when nothing to steal; Flip 7 on stolen 7th |
 | `round_and_game.feature` | Score accumulation, win at 200+, tie continuation, bust at threshold |
 
 The feature files serve as **living documentation** of the rules — readable without knowing Go. Game-mechanics tests bypass the dealing phase by constructing state directly (same-package access), then drive actions through the public API (`Draw`, `Stop`, `Target`).

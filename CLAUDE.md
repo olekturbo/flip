@@ -2,23 +2,29 @@
 
 ## Rules sync rule (MANDATORY)
 
-Whenever you modify **any game mechanic** — scoring, card effects, deck composition, action card behaviour, Flip 7 bonus, bust logic, dealing phase, win condition, or any other rule — you **must** also update the rules modal in `web/game.html`.
+Whenever you modify **any game mechanic** — scoring, card effects, deck composition, action card behaviour, Flip 7 bonus, bust logic, dealing phase, win condition, or any other rule — you **must** update **all** of the following:
 
-The rules modal starts at the `<!-- Rules modal -->` comment and ends before `<script src="/js/app.js">`.
+1. **`web/game.html`** rules modal (between `<!-- Rules modal -->` and `<script src="/js/app.js">`).
+2. **`RULES.md`** in the repository root — keep it word-for-word in sync with the HTML modal.
+3. **`README.md`** Rules Summary section — same sections, same wording.
+4. **`internal/game/features/*.feature`** — the relevant BDD scenario(s) must reflect the changed mechanic. See also the Tests sync rule below.
 
-Keep the HTML description **exactly in sync** with the actual Go logic in `internal/game/`. Do not paraphrase or summarise differently from how the code works.
+Keep every description **exactly in sync** with the actual Go logic in `internal/game/`. Do not paraphrase or summarise differently from how the code works.
 
 Specific sections to watch:
-| Game change | HTML section to update |
+| Game change | What to update |
 |---|---|
-| Deck composition (`deck.go`) | "Deck — 100 cards" |
-| Scoring formula (`player.go RoundScore`) | "Modifier Cards", "Scoring" |
-| Action card effects (`game.go resolveActionWithTarget`) | "Action Cards" |
-| Flip 7 bonus (`game.go triggerFlip7 / endRound`) | "Flip 7 Bonus" |
-| Win score constant (`WinScore`) | "Winning" |
-| Bust / Second Chance logic | "Busting", "Action Cards → 2nd Chance" |
-
-Always update `README.md` as well when rules or architecture change.
+| Deck composition (`deck.go`) | "Deck — 103 cards" in HTML/RULES/README |
+| Scoring formula (`player.go RoundScore`) | "Modifier Cards" + "Scoring" in HTML/RULES/README |
+| Freeze card effect | "Action Cards → Freeze" in HTML/RULES/README |
+| Flip 3 card effect | "Action Cards → Flip 3" in HTML/RULES/README + `flip3.feature` |
+| Second Chance card effect | "Action Cards → 2nd Chance" + "Busting" in HTML/RULES/README + `second_chance.feature` |
+| Thief card effect | "Action Cards → Thief" in HTML/RULES/README + `thief.feature` |
+| Positive modifier cards (+2…+10, ×2) | "Modifier Cards" in HTML/RULES/README |
+| Negative modifier cards (-2…-10, ÷2) | "Modifier Cards" in HTML/RULES/README |
+| Flip 7 bonus (`triggerFlip7 / endRound`) | "Flip 7 Bonus" in HTML/RULES/README + `flip7.feature` |
+| Win score constant (`WinScore`) | "Winning" in HTML/RULES/README + `round_and_game.feature` |
+| Bust logic | "Busting" in HTML/RULES/README + `bust.feature` |
 
 ## Tests sync rule (MANDATORY)
 
@@ -28,7 +34,20 @@ Whenever you modify **any game mechanic** in `internal/game/` — or add a new o
 - **Scoring formula change** → add/update cases in `TestRoundScore` in `player_test.go`
 - **New or changed action card, bust logic, Flip 3/7, win condition, dealing phase** → add/update scenario tests in `game_test.go` AND add/update BDD scenarios in `features/*.feature`
 
-The BDD feature files in `internal/game/features/` are **living documentation** — they must stay in sync with actual game behaviour. When adding a new mechanic, add a readable Gherkin scenario that describes it. When changing a mechanic, update the scenario to match.
+The BDD feature files in `internal/game/features/` are **living documentation** — they must stay in sync with actual game behaviour:
+
+| Feature file | What it documents |
+|---|---|
+| `scoring.feature` | All score combinations: plain numbers, ×2, ÷2, +/- modifiers, minimum zero |
+| `bust.feature` | Bust on duplicate number; modifiers never bust |
+| `second_chance.feature` | SC prevents bust, consumed on use, auto-resolves with single target, Flip 3 draws continue |
+| `freeze.feature` | Freeze targeting, auto-target, banked score |
+| `flip3.feature` | 3 forced draws, stops on bust or Flip 7 only, deferred action resolution |
+| `flip7.feature` | 7 unique numbers ends round, +15 bonus, active players bank |
+| `thief.feature` | Two-stage steal: choose player then card; discarded when nothing to steal; Flip 7 on stolen 7th |
+| `round_and_game.feature` | Score accumulation, win at 200+, tie continuation, bust at threshold |
+
+When adding a new mechanic, add a readable Gherkin scenario. When changing a mechanic, update the scenario to match.
 
 Run `go test ./internal/game/...` and confirm all tests pass before committing. Never leave a mechanic change without test coverage.
 
@@ -36,9 +55,9 @@ Run `go test ./internal/game/...` and confirm all tests pass before committing. 
 
 These are the official rules this implementation is designed to match. Deviations are noted.
 
-### Deck — 100 cards
+### Deck — 103 cards
 - **Number cards (79):** values 0–12; card N appears N times (0 appears once).
-- **Action cards (9):** 3× Freeze, 3× Flip 3, 3× Second Chance.
+- **Action cards (12):** 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief.
 - **Positive modifier cards (6):** +2, +4, +6, +8, +10, ×2.
 - **Negative modifier cards (6):** -2, -4, -6, -8, -10, ÷2.
 - Deck carries over between rounds; reshuffled only when empty.
@@ -50,13 +69,25 @@ Draw one card OR stay. Action cards require choosing a target (any active player
 Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 
 ### Second Chance
-- When used to prevent a bust: discard both SC and duplicate; **turn ends** (play passes to next player). During Flip 3, the remaining Flip 3 draws are also cancelled.
+- When used to prevent a bust: discard both SC and duplicate; **turn ends** (play passes to next player). During Flip 3, the remaining Flip 3 draws **continue** (only a real bust or Flip 7 stops the sequence early).
 - Only one SC per player at a time.
 
 ### Flip 3
 - Target draws exactly 3 cards one at a time.
-- Sequence stops early on **bust** or **Flip 7**; otherwise all 3 are drawn.
+- Sequence stops early on **bust** or **Flip 7**; a Second Chance save does NOT stop it — remaining draws continue.
 - Action cards drawn during Flip 3 are deferred and resolved interactively after all draws complete.
+
+### Thief
+- Two-stage interaction: first choose a target player, then choose which of their number cards to steal.
+- The stolen number card moves from the target's hand to the drawer's hand.
+- Thief can only target players who hold at least one number card the drawer does not already hold.
+- If no valid target exists (or nothing to steal), Thief is discarded with no effect.
+- Stealing the 7th unique number triggers Flip 7 immediately.
+
+### Negative modifiers
+- **-2 / -4 / -6 / -8 / -10** — subtracted from the final round score.
+- **÷2** — halves the number-card total (rounded down) before modifiers are applied. Cancels out with ×2 if both held (net effect: ×1).
+- Minimum round score is 0 (negative results are floored at zero).
 
 ### Scoring
 `(sum of number cards [×2 or ÷2 if held; cancel each other]) + sum of +modifiers - sum of -modifiers`

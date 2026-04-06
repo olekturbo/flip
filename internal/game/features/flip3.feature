@@ -1,6 +1,6 @@
 Feature: Flip 3
   Flip 3 forces the target to draw exactly 3 cards from the deck, one at a time.
-  The sequence stops early on a bust, a Second Chance save, or a Flip 7.
+  The sequence stops early on a bust or a Flip 7; a Second Chance save does not stop it.
   Action cards drawn during Flip 3 are deferred and resolved interactively afterwards.
 
   Scenario: Target draws exactly 3 cards
@@ -22,7 +22,7 @@ Feature: Flip 3
     Then Bob is busted
     And Bob does not have 9 in his hand
 
-  Scenario: Second Chance saves the target mid-Flip 3 and cancels remaining draws
+  Scenario: Second Chance saves the target mid-Flip 3 and remaining draws continue
     Given Alice has [1]
     And Bob has [5] and a Second Chance
     And the deck is [Flip 3, 3, 5, 9]
@@ -30,7 +30,7 @@ Feature: Flip 3
     And Alice targets Bob
     Then Bob is not busted
     And Bob no longer has Second Chance
-    And Bob does not have 9 in his hand
+    And Bob has 9 in his hand
 
   Scenario: Flip 7 during Flip 3 ends the round immediately
     Given Alice has [1]

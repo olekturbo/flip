@@ -1,7 +1,7 @@
 Feature: Second Chance card
   A player holding Second Chance is saved from their next bust.
   The bust is cancelled, the SC card is removed from their hand, and their turn
-  ends immediately. During Flip 3, the remaining forced draws are also cancelled.
+  ends immediately. During Flip 3, the remaining forced draws still continue.
   Each player can hold at most one Second Chance at a time.
 
   Scenario: Second Chance prevents a bust and ends the player's turn
@@ -52,7 +52,7 @@ Feature: Second Chance card
     Then Alice has Second Chance
     And no target choice is pending
 
-  Scenario: Second Chance saves target during Flip 3 and cancels remaining draws
+  Scenario: Second Chance saves target mid-Flip 3 and remaining draws continue
     Given Alice has [1]
     And Bob has [5] and a Second Chance
     And the deck is [Flip 3, 3, 5, 9]
@@ -60,4 +60,4 @@ Feature: Second Chance card
     And Alice targets Bob
     Then Bob is not busted
     And Bob no longer has Second Chance
-    And Bob does not have 9 in his hand
+    And Bob has 9 in his hand
