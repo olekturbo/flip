@@ -5,26 +5,27 @@
 Whenever you modify **any game mechanic** — scoring, card effects, deck composition, action card behaviour, Flip 7 bonus, bust logic, dealing phase, win condition, or any other rule — you **must** update **all** of the following:
 
 1. **`web/game.html`** rules modal (between `<!-- Rules modal -->` and `<script src="/js/app.js">`).
-2. **`RULES.md`** in the repository root — keep it word-for-word in sync with the HTML modal.
-3. **`README.md`** Rules Summary section — same sections, same wording.
-4. **`internal/game/features/*.feature`** — the relevant BDD scenario(s) must reflect the changed mechanic. See also the Tests sync rule below.
+2. **`web/rules.html`** standalone rules page — keep in sync with `game.html`.
+3. **`RULES.md`** in the repository root — keep it word-for-word in sync with the HTML modal.
+4. **`README.md`** Rules Summary section — same sections, same wording.
+5. **`internal/game/features/*.feature`** — the relevant BDD scenario(s) must reflect the changed mechanic. See also the Tests sync rule below.
 
 Keep every description **exactly in sync** with the actual Go logic in `internal/game/`. Do not paraphrase or summarise differently from how the code works.
 
 Specific sections to watch:
 | Game change | What to update |
 |---|---|
-| Deck composition (`deck.go`) | "Deck — 103 cards" in HTML/RULES/README |
-| Scoring formula (`player.go RoundScore`) | "Modifier Cards" + "Scoring" in HTML/RULES/README |
-| Freeze card effect | "Action Cards → Freeze" in HTML/RULES/README |
-| Flip 3 card effect | "Action Cards → Flip 3" in HTML/RULES/README + `flip3.feature` |
-| Second Chance card effect | "Action Cards → 2nd Chance" + "Busting" in HTML/RULES/README + `second_chance.feature` |
-| Thief card effect | "Action Cards → Thief" in HTML/RULES/README + `thief.feature` |
-| Positive modifier cards (+2…+10, ×2) | "Modifier Cards" in HTML/RULES/README |
-| Negative modifier cards (-2…-10, ÷2) | "Modifier Cards" in HTML/RULES/README |
-| Flip 7 bonus (`triggerFlip7 / endRound`) | "Flip 7 Bonus" in HTML/RULES/README + `flip7.feature` |
-| Win score constant (`WinScore`) | "Winning" in HTML/RULES/README + `round_and_game.feature` |
-| Bust logic | "Busting" in HTML/RULES/README + `bust.feature` |
+| Deck composition (`deck.go`) | "Deck — 103 cards" in game.html/rules.html/RULES/README |
+| Scoring formula (`player.go RoundScore`) | "Modifier Cards" + "Scoring" in game.html/rules.html/RULES/README |
+| Freeze card effect | "Action Cards → Freeze" in game.html/rules.html/RULES/README |
+| Flip 3 card effect | "Action Cards → Flip 3" in game.html/rules.html/RULES/README + `flip3.feature` |
+| Second Chance card effect | "Action Cards → 2nd Chance" + "Busting" in game.html/rules.html/RULES/README + `second_chance.feature` |
+| Thief card effect | "Action Cards → Thief" in game.html/rules.html/RULES/README + `thief.feature` |
+| Positive modifier cards (+2…+10, ×2) | "Modifier Cards" in game.html/rules.html/RULES/README |
+| Negative modifier cards (-2…-10, ÷2) | "Modifier Cards" in game.html/rules.html/RULES/README |
+| Flip 7 bonus (`triggerFlip7 / endRound`) | "Flip 7 Bonus" in game.html/rules.html/RULES/README + `flip7.feature` |
+| Win score constant (`WinScore`) | "Winning" in game.html/rules.html/RULES/README + `round_and_game.feature` |
+| Bust logic | "Busting" in game.html/rules.html/RULES/README + `bust.feature` |
 
 ## Card visibility rule (MANDATORY)
 
