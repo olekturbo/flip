@@ -144,10 +144,18 @@ function render() {
   // ── 1. Diff against previous state ────────────────────────────────────────
   const prevSnapshot = prevPlayers.slice();
 
+  // Detect a round transition: prevPlayers still holds the previous round's
+  // card counts. On a new round all cards are fresh, so prevCount must be 0
+  // for every player — otherwise Flip 3 stagger / bust timing breaks because
+  // newCount is computed against stale old-round card counts.
+  const isNewRound = prevSnapshot.length > 0 &&
+    prevSnapshot[0].roundNumber !== undefined &&
+    prevSnapshot[0].roundNumber !== gameState.roundNumber;
+
   gameState.players.forEach(p => {
     const prev      = prevSnapshot.find(pp => pp.id === p.id);
-    const prevCount = prev ? prev.cards.length : 0;
-    const prevStat  = prev ? prev.status       : null;
+    const prevCount = isNewRound ? 0 : (prev ? prev.cards.length : 0);
+    const prevStat  = isNewRound ? null : (prev ? prev.status : null);
     const newCount  = p.cards.length - prevCount;
 
     // Card arrival: start staggered reveal (or instant for single draws).
@@ -303,7 +311,7 @@ function render() {
   // (Multi-card stagger is handled inside startCardReveals)
   gameState.players.forEach(p => {
     const prev      = prevSnapshot.find(pp => pp.id === p.id);
-    const prevCount = prev ? prev.cards.length : 0;
+    const prevCount = isNewRound ? 0 : (prev ? prev.cards.length : 0);
     if (p.cards.length - prevCount === 1 && revealProgress[p.id] === undefined) {
       setTimeout(() => {
         const panel = document.querySelector(`[data-player-id="${p.id}"]`);
@@ -321,18 +329,34 @@ function render() {
   // ── 5. Thief discarded with no effect — ghost card animation ─────────────
   const curMsg = gameState.message || '';
   if (curMsg !== prevMessage) {
+    // Normal discard: "X drew/dealt/used Thief … discarded."
     // Matches: "X drew Thief — no card to steal, discarded."
-    //          "X drew Thief — no valid target, discarded."
     //          "X dealt Thief — no valid target, discarded."
     //          "X used Thief on Y — nothing to steal, discarded."
     const thiefDiscardMatch = curMsg.match(/^(.+?) (?:drew|dealt|used) Thief(?: on .+?)? — (?:no card to steal|no valid target|nothing to steal), discarded/);
-    if (thiefDiscardMatch) {
-      const drawerName = thiefDiscardMatch[1];
-      const drawerPlayer = gameState.players.find(p => p.name === drawerName);
-      if (drawerPlayer) {
-        showActionBanner(`🃏 ${drawerName} — Thief discarded (nothing to steal)`, 'rgba(109,40,217,0.95)');
+
+    // Deferred discard (Thief drawn during Flip 3, auto-resolved with no target):
+    // "Thief (deferred from Flip 3) — no valid target to steal from, discarded."
+    // "Thief (deferred) — no valid target to steal from, discarded."
+    const deferredThiefDiscard = !thiefDiscardMatch &&
+      /^Thief \(deferred/.test(curMsg) && curMsg.includes('discarded');
+
+    if (thiefDiscardMatch || deferredThiefDiscard) {
+      // For normal discards the player is named; for deferred ones identify
+      // the Flip 3 target by finding whoever has a flip3 card in their hand.
+      let targetPlayer;
+      if (thiefDiscardMatch) {
+        const drawerName = thiefDiscardMatch[1];
+        targetPlayer = gameState.players.find(p => p.name === drawerName);
+      } else {
+        targetPlayer = gameState.players.find(p =>
+          p.cards && p.cards.some(c => c.type === 'flip3'));
+      }
+
+      if (targetPlayer) {
+        showActionBanner(`🃏 ${targetPlayer.name} — Thief discarded (nothing to steal)`, 'rgba(109,40,217,0.95)');
         setTimeout(() => {
-          const panel = document.querySelector(`[data-player-id="${drawerPlayer.id}"]`);
+          const panel = document.querySelector(`[data-player-id="${targetPlayer.id}"]`);
           if (!panel) return;
           const cardsEl = panel.querySelector('.player-cards');
           if (!cardsEl) return;
