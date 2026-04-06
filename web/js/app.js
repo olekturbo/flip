@@ -18,6 +18,7 @@ let countdownInterval = null; // 100ms RAF-style ticker for next-round countdown
 let roundEndedAtClient = null; // Date.now() calibrated to when round ended
 const AUTO_NEXT_MS = 4000;    // must match Go AutoNextRound
 let animBlockedUntil = 0;     // epoch ms — block turn controls until animations finish
+let _pendingActionSoundPlayed = false; // guard: play targeting sound only once per pending action
 
 // Per-player card reveal state (for Flip 3 stagger)
 const revealProgress = {}; // playerId → currently-visible card count
@@ -167,7 +168,7 @@ function render() {
         showActionBanner(`🃏 ${p.name} — stole ${stolenLabel}!`, 'rgba(109,40,217,0.95)');
         sndThief();
       } else {
-        showActionBanner(`🎲 ${p.name} — Flip 3!`, 'rgba(194,65,12,0.95)');
+        showActionBanner(`🎲 Flip 3 on ${p.name}!`, 'rgba(194,65,12,0.95)');
         sndFlip3();
       }
     }
@@ -245,7 +246,7 @@ function render() {
         prev.roundNumber === gameState.roundNumber) {
       const pid = p.id, pname = p.name;
       // Parse the duplicate value from the message (e.g. "drew 9 (duplicate!)")
-      const scMatch = gameState.message.match(/drew (\d+) .*duplicate/);
+      const scMatch = gameState.message.match(/(?:drew|dealt) (\d+)/);
       const savedVal = scMatch ? scMatch[1] : '?';
 
       showActionBanner(`🛡️ ${pname} — 2nd Chance saved from ${savedVal}!`, 'rgba(5,120,80,0.95)');
@@ -489,7 +490,11 @@ function renderPlaying() {
 
       const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
-      pa.card.type === 'thief' ? sndThief() : sndActionCard();
+      if (!_pendingActionSoundPlayed) {
+        _pendingActionSoundPlayed = true;
+        const soundMap = { freeze: sndFreeze, flip3: sndFlip3, second_chance: sndSecondChance, thief: sndThief };
+        (soundMap[pa.card.type] || sndActionCard)();
+      }
       el('targeting-card-name').textContent = `You drew: ${cardLabel}`;
 
       if (pa.card.type === 'thief' && pa.thiefVictimID) {
@@ -527,6 +532,8 @@ function renderPlaying() {
     }
     return;
   }
+
+  _pendingActionSoundPlayed = false; // no active pending action — reset for next draw
 
   if (myTurn) {
     const remaining = animBlockedUntil - Date.now();
@@ -653,18 +660,33 @@ function flushTurnControls() {
 
 // ── Action banner ─────────────────────────────────────────────────────────────
 
+const _activeBanners = []; // live banner elements — used to stack multiple banners vertically
+
 function showActionBanner(text, bgColor) {
+  // Purge banners that have already been removed from the DOM.
+  _activeBanners.splice(0, _activeBanners.length,
+    ..._activeBanners.filter(b => document.body.contains(b)));
+
+  const slot = _activeBanners.length;
   const banner = document.createElement('div');
   banner.className = 'action-banner';
   banner.style.background = bgColor;
+  // Stack additional banners below the first so they don't overlap.
+  if (slot > 0) banner.style.top = `calc(5rem + ${slot} * 3.2rem)`;
   banner.textContent = text;
   document.body.appendChild(banner);
+  _activeBanners.push(banner);
+
   // Double rAF ensures the initial opacity:0 state is painted before transition.
   requestAnimationFrame(() => requestAnimationFrame(() => banner.classList.add('action-banner-show')));
   setTimeout(() => {
     banner.classList.remove('action-banner-show');
     banner.classList.add('action-banner-hide');
-    setTimeout(() => banner.remove(), 400);
+    setTimeout(() => {
+      banner.remove();
+      const idx = _activeBanners.indexOf(banner);
+      if (idx !== -1) _activeBanners.splice(idx, 1);
+    }, 400);
   }, 2800);
 }
 
@@ -840,7 +862,8 @@ function updateEventLog(events) {
     else if (e.includes('FLIP 7'))                              cls += ' ev-flip7';
     else if (e.includes('stopped'))                             cls += ' ev-stop';
     else if (e.includes('Freeze') || e.includes('Flip 3') ||
-             e.includes('2nd Chance') || e.includes('froze'))  cls += ' ev-action';
+             e.includes('2nd Chance') || e.includes('froze') ||
+             e.includes('Thief') || e.includes('stole'))        cls += ' ev-action';
     else if (e.startsWith('  '))                                cls += ' ev-sub';
     return `<div class="${cls}">${esc(e.trim())}</div>`;
   }).join('');
