@@ -77,7 +77,7 @@ func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
 	})
 
 	// WebSocket upgrade for an existing (or newly created) room.
-	mux.HandleFunc("/ws/{roomID}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /ws/{roomID}", func(w http.ResponseWriter, r *http.Request) {
 		roomID := r.PathValue("roomID")
 		if roomID == "" {
 			http.Error(w, "missing room ID", http.StatusBadRequest)
