@@ -146,8 +146,8 @@ function sndThief() {
   });
 }
 
-// Shuffle card — two-note crossing swish (cards trading places)
-function sndShuffle() {
+// Swap card — two-note crossing swish (cards trading places)
+function sndSwap() {
   play(ctx => {
     const t = ctx.currentTime;
     freqRamp(ctx, 'sine',     400, 900, t,        0.16, 0.18); // up

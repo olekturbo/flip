@@ -21,7 +21,7 @@ Specific sections to watch:
 | Flip 3 card effect | "Action Cards → Flip 3" in game.html/rules.html/RULES.md + `flip3.feature` |
 | Second Chance card effect | "Action Cards → 2nd Chance" + "Busting" in game.html/rules.html/RULES.md + `second_chance.feature` |
 | Thief card effect | "Action Cards → Thief" in game.html/rules.html/RULES.md + `thief.feature` |
-| Shuffle card effect | "Action Cards → Shuffle" in game.html/rules.html/RULES.md + `shuffle.feature` |
+| Swap card effect | "Action Cards → Swap" in game.html/rules.html/RULES.md + `shuffle.feature` |
 | Positive modifier cards (+2…+10, ×2) | "Modifier Cards" in game.html/rules.html/RULES.md |
 | Negative modifier cards (-2…-10, ÷2) | "Modifier Cards" in game.html/rules.html/RULES.md |
 | Flip 7 bonus (`triggerFlip7 / endRound`) | "Flip 7 Bonus" in game.html/rules.html/RULES.md + `flip7.feature` |
@@ -38,7 +38,7 @@ Every action card that resolves successfully **must remain visible in a player's
 | Flip 3 | Target's hand (orange marker) |
 | Second Chance | Target's hand until consumed (green marker; ghost animation on use) |
 | Thief (successful steal) | Drawer's hand (purple marker) |
-| Shuffle (successful swap) | Drawer's hand (teal marker) |
+| Swap (successful swap) | Drawer's hand (teal marker) |
 
 When adding a new action card: ensure `applyXxx` adds the card to the relevant player's `Cards` slice (not `UsedCards`) so it renders automatically via `card-{type}` CSS. Only discard to `UsedCards` when the card has **no effect** (no valid target etc.) — in that case a ghost animation should be shown instead.
 
@@ -74,7 +74,7 @@ These are the official rules this implementation is designed to match. Deviation
 
 ### Deck — 106 cards
 - **Number cards (79):** values 0–12; card N appears N times (0 appears once).
-- **Action cards (15):** 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief, 3× Shuffle.
+- **Action cards (15):** 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief, 3× Swap.
 - **Positive modifier cards (6):** +2, +4, +6, +8, +10, ×2.
 - **Negative modifier cards (6):** -2, -4, -6, -8, -10, ÷2.
 - Deck carries over between rounds; reshuffled only when empty.
@@ -101,10 +101,10 @@ Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 - If no valid target exists (or nothing to steal), Thief is discarded with no effect.
 - Stealing the 7th unique number triggers Flip 7 immediately.
 
-### Shuffle
+### Swap
 - Two-stage interaction: first choose any active opponent who holds at least one number card (drawer must also hold at least one); then choose which of the drawer's number cards and which of the partner's number cards to swap.
 - The two chosen number cards trade hands.
-- If no valid partner exists, Shuffle is discarded with no effect.
+- If no valid partner exists, Swap is discarded with no effect.
 - Swapping the 7th unique number triggers Flip 7 immediately (drawer checked first).
 
 ### Negative modifiers

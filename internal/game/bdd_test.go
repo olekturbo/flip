@@ -100,7 +100,7 @@ func bddParseCard(s string) Card {
 		return SecondChanceCard()
 	case "Thief":
 		return ThiefCard()
-	case "Shuffle":
+	case "Swap":
 		return ShuffleCard()
 	case "×2":
 		return ModifierMulCard()

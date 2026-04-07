@@ -9,7 +9,7 @@ A faithful digital adaptation of the **Flip 7** card game by [The Op](https://th
 | Type | Cards |
 |------|-------|
 | Number cards | 0–12; card N appears N times (0 appears once) → **79 cards** |
-| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief, 3× Shuffle → **15 cards** |
+| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief, 3× Swap → **15 cards** |
 | Positive modifier cards | +2, +4, +6, +8, +10, ×2 → **6 cards** |
 | Negative modifier cards | -2, -4, -6, -8, -10, ÷2 → **6 cards** |
 
@@ -50,7 +50,7 @@ Target holds this card. If they would bust, discard both the duplicate and this 
 ### Thief
 Two-stage interaction: first choose a target player, then choose which of their number cards to steal. The chosen card moves from the target's hand to yours. You can only target players who hold at least one number card you don't already hold. If no valid target exists, Thief is discarded with no effect. Stealing the 7th unique number triggers Flip 7 immediately.
 
-### Shuffle
+### Swap
 Two-stage interaction: first choose any active opponent who holds at least one number card (you must also hold at least one). Then choose one of your number cards and one of theirs to swap — the two cards trade hands. If the swap gives you 7 unique number cards, Flip 7 triggers immediately. Discarded with no effect if no valid swap target exists.
 
 ---

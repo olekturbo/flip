@@ -198,7 +198,7 @@ func (r *Room) handleAction(sessionID string, msg ClientMessage) {
 		actionErr = r.game.Target(sessionID, msg.TargetID)
 	case "steal":
 		actionErr = r.game.Steal(sessionID, msg.CardValue)
-	case "shuffle":
+	case "swap":
 		actionErr = r.game.ShuffleSwap(sessionID, msg.CardValue, msg.CardValue2)
 	case "restart":
 		actionErr = r.game.Restart(sessionID)
