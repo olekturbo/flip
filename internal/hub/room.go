@@ -16,11 +16,12 @@ import (
 
 // ClientMessage is a message sent from the browser to the server.
 type ClientMessage struct {
-	Action    string `json:"action"`
-	Name      string `json:"name"`
-	SessionID string `json:"sessionID"`
-	TargetID  string `json:"targetID"`  // for "target" action
-	CardValue int    `json:"cardValue"` // for "steal" action (Thief card)
+	Action     string `json:"action"`
+	Name       string `json:"name"`
+	SessionID  string `json:"sessionID"`
+	TargetID   string `json:"targetID"`   // for "target" action
+	CardValue  int    `json:"cardValue"`  // for "steal" action (Thief) and "shuffle" action (drawer's card)
+	CardValue2 int    `json:"cardValue2"` // for "shuffle" action (partner's card)
 }
 
 // Client wraps a WebSocket connection with a per-connection write lock.
@@ -197,6 +198,8 @@ func (r *Room) handleAction(sessionID string, msg ClientMessage) {
 		actionErr = r.game.Target(sessionID, msg.TargetID)
 	case "steal":
 		actionErr = r.game.Steal(sessionID, msg.CardValue)
+	case "shuffle":
+		actionErr = r.game.ShuffleSwap(sessionID, msg.CardValue, msg.CardValue2)
 	case "restart":
 		actionErr = r.game.Restart(sessionID)
 	default:

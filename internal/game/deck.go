@@ -2,16 +2,16 @@ package game
 
 import "math/rand"
 
-// NewDeck returns a freshly shuffled 103-card Flip 7 deck:
+// NewDeck returns a freshly shuffled 106-card Flip 7 deck:
 //
-//	Number cards: 0 → 1 copy, N → N copies (N = 1..12)  →  79 cards
-//	3× Freeze, 3× Flip Three, 3× Second Chance, 3× Thief →  12 cards
-//	+2, +4, +6, +8, +10, ×2                              →   6 cards
-//	-2, -4, -6, -8, -10, ÷2                              →   6 cards
+//	Number cards: 0 → 1 copy, N → N copies (N = 1..12)              →  79 cards
+//	3× Freeze, 3× Flip Three, 3× Second Chance, 3× Thief, 3× Shuffle → 15 cards
+//	+2, +4, +6, +8, +10, ×2                                          →   6 cards
+//	-2, -4, -6, -8, -10, ÷2                                          →   6 cards
 //
-// Total: 103 cards.
+// Total: 106 cards.
 func NewDeck() []Card {
-	deck := make([]Card, 0, 103)
+	deck := make([]Card, 0, 106)
 
 	// Number cards
 	for i := 0; i <= 12; i++ {
@@ -30,6 +30,7 @@ func NewDeck() []Card {
 		deck = append(deck, Flip3Card())
 		deck = append(deck, SecondChanceCard())
 		deck = append(deck, ThiefCard())
+		deck = append(deck, ShuffleCard())
 	}
 
 	// Positive modifier cards (one each)

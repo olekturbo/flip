@@ -141,13 +141,14 @@ function handleMessage(msg) {
 
 // Banner colour palette (one place to update colours).
 const BANNER = {
-  bust:   'rgba(185,28,28,0.95)',
-  freeze: 'rgba(29,78,216,0.95)',
-  flip3:  'rgba(194,65,12,0.95)',
-  thief:  'rgba(109,40,217,0.95)',
-  stop:   'rgba(22,101,52,0.95)',
-  flip7:  'rgba(120,53,15,0.97)',
-  sc:     'rgba(5,120,80,0.95)',
+  bust:    'rgba(185,28,28,0.95)',
+  freeze:  'rgba(29,78,216,0.95)',
+  flip3:   'rgba(194,65,12,0.95)',
+  thief:   'rgba(109,40,217,0.95)',
+  shuffle: 'rgba(3,105,161,0.95)',
+  stop:    'rgba(22,101,52,0.95)',
+  flip7:   'rgba(120,53,15,0.97)',
+  sc:      'rgba(5,120,80,0.95)',
 };
 
 // Spawn a ghost card inside a player's hand panel, then auto-fade it out.
@@ -239,6 +240,38 @@ function handleGameEvent(msg) {
     if (tp) {
       showActionBanner(`🃏 ${tp.name} — Thief discarded (nothing to steal)`, BANNER.thief);
       spawnGhostCard(tp.id, 'ghost-thief-card', '🃏', 'Thief — nothing to steal, discarded', 80);
+    }
+    return;
+  }
+
+  // Shuffle swap succeeded
+  if (msg.includes('used Shuffle — swapped')) {
+    const m = msg.match(/^(.+?) used Shuffle — swapped (.+?) with (.+?)'s (.+?)!/);
+    if (m) {
+      showActionBanner(`🔀 ${m[1]} swapped ${m[2]} ↔ ${m[3]}'s ${m[4]}!`, BANNER.shuffle);
+      sndShuffle();
+      // Briefly highlight both players' panels.
+      const p1 = gameState.players.find(p => p.name === m[1]);
+      const p2 = gameState.players.find(p => p.name === m[3]);
+      [p1, p2].forEach(p => {
+        if (!p) return;
+        const panel = document.querySelector(`[data-player-id="${p.id}"]`);
+        if (panel) {
+          panel.classList.add('just-shuffle');
+          panel.addEventListener('animationend', () => panel.classList.remove('just-shuffle'), { once: true });
+        }
+      });
+    }
+    return;
+  }
+
+  // Shuffle discarded — no valid swap target
+  if (msg.includes('Shuffle') && msg.includes('discarded')) {
+    const m  = msg.match(/^(.+?) (?:drew|dealt|used) Shuffle/);
+    const tp = m ? gameState.players.find(p => p.name === m[1]) : null;
+    if (tp) {
+      showActionBanner(`🔀 ${tp.name} — Shuffle discarded (no valid swap)`, BANNER.shuffle);
+      spawnGhostCard(tp.id, 'ghost-shuffle-card', '🔀', 'Shuffle — discarded', 80);
     }
     return;
   }
@@ -497,7 +530,7 @@ function renderPlaying() {
         return;
       }
 
-      const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
+      const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief', shuffle: 'Shuffle' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
       const paKey = pa.drawerID + ':' + pa.card.type;
       if (_lastPendingKey !== paKey) {
@@ -514,9 +547,27 @@ function renderPlaying() {
         el('targeting-buttons').innerHTML = (pa.stealableCards || []).map(c =>
           `<button class="btn-target card card-n-${c.value}" onclick="sendSteal(${c.value})">${esc(c.name)}</button>`
         ).join('');
+      } else if (pa.card.type === 'shuffle' && pa.shufflePartnerID) {
+        // Stage 2: partner chosen — pick the card pair to swap
+        const partner = gameState.players.find(p => p.id === pa.shufflePartnerID);
+        el('targeting-prompt').textContent =
+          `Choose which cards to swap with ${partner ? esc(partner.name) : '?'}:`;
+        const myCards     = pa.shuffleDrawerCards  || [];
+        const theirCards  = pa.shufflePartnerCards || [];
+        el('targeting-buttons').innerHTML = myCards.flatMap(mc =>
+          theirCards.map(tc =>
+            `<button class="btn-target btn-swap-pair" onclick="sendShuffleSwap(${mc.value},${tc.value})">` +
+            `<span class="card card-n-${mc.value}">${esc(mc.name)}</span>` +
+            `<span class="swap-arrow">↔</span>` +
+            `<span class="card card-n-${tc.value}">${esc(tc.name)}</span>` +
+            `</button>`
+          )
+        ).join('');
       } else {
         // Stage 1 (all action cards): pick a player
-        const prompt = pa.card.type === 'thief' ? 'Choose a player to steal from:' : 'Choose a target:';
+        let prompt = 'Choose a target:';
+        if (pa.card.type === 'thief')   prompt = 'Choose a player to steal from:';
+        if (pa.card.type === 'shuffle') prompt = 'Choose a player to swap with:';
         el('targeting-prompt').textContent = prompt;
         el('targeting-buttons').innerHTML = (pa.validTargetIDs || []).map(tid => {
           const tp = gameState.players.find(p => p.id === tid);
@@ -533,7 +584,7 @@ function renderPlaying() {
         return;
       }
       const drawer = gameState.players.find(p => p.id === pa.drawerID);
-      const waitLabelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
+      const waitLabelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief', shuffle: 'Shuffle' };
       const waitCardLabel = waitLabelMap[pa.card.type] || pa.card.type;
       el('targeting-waiting').textContent =
         `Waiting for ${drawer ? esc(drawer.name) : 'a player'} to play ${waitCardLabel}…`;
@@ -567,6 +618,14 @@ function sendTarget(targetID) {
 function sendSteal(cardValue) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ action: 'steal', cardValue }));
+  } else {
+    showToast('Not connected — reconnecting…');
+  }
+}
+
+function sendShuffleSwap(myCardValue, theirCardValue) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: 'shuffle', cardValue: myCardValue, cardValue2: theirCardValue }));
   } else {
     showToast('Not connected — reconnecting…');
   }

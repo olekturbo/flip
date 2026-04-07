@@ -28,9 +28,10 @@ const (
 
 // pendingAction holds an action card awaiting target selection by the drawer.
 type pendingAction struct {
-	Card         Card
-	DrawerIdx    int
-	ThiefVictim  *Player // non-nil during Thief stage 2 (card selection after player chosen)
+	Card            Card
+	DrawerIdx       int
+	ThiefVictim     *Player // non-nil during Thief stage 2 (card selection after player chosen)
+	ShufflePartner  *Player // non-nil during Shuffle stage 2 (card pair selection after partner chosen)
 }
 
 // PendingActionState is the JSON-serialisable form broadcast to clients.
@@ -41,6 +42,10 @@ type PendingActionState struct {
 	// Thief stage 2: victim already chosen, now pick which card to steal.
 	ThiefVictimID  string `json:"thiefVictimID,omitempty"`
 	StealableCards []Card `json:"stealableCards,omitempty"`
+	// Shuffle stage 2: partner already chosen, now pick which cards to exchange.
+	ShufflePartnerID    string `json:"shufflePartnerID,omitempty"`
+	ShuffleDrawerCards  []Card `json:"shuffleDrawerCards,omitempty"`
+	ShufflePartnerCards []Card `json:"shufflePartnerCards,omitempty"`
 }
 
 // GameState is the JSON-serialisable snapshot broadcast to clients.
@@ -132,6 +137,21 @@ func (g *Game) processDeferredCards() {
 			} else {
 				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
 				g.Message = fmt.Sprintf("%s drew Thief during Flip 3 — choose a player to steal from!", p.Name)
+				return
+			}
+			continue
+		}
+
+		// Shuffle always requires two-stage interaction — skip the auto-resolve path.
+		if dc.Type == CardTypeShuffle {
+			targets := g.validShuffleTargets(p)
+			if len(targets) == 0 {
+				g.logEvent("  Shuffle (deferred) — no valid swap target, discarded")
+				g.Message = "Shuffle (deferred from Flip 3) — no valid swap target, discarded."
+				g.UsedCards = append(g.UsedCards, dc)
+			} else {
+				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
+				g.Message = fmt.Sprintf("%s drew Shuffle during Flip 3 — choose a player to swap with!", p.Name)
 				return
 			}
 			continue
@@ -260,6 +280,7 @@ func (g *Game) TickInactive() bool {
 		if !drawer.Connected && time.Since(drawer.DisconnectedAt) > TurnSkipDelay {
 			card := g.pending.Card
 			victim := g.pending.ThiefVictim
+			shufflePartner := g.pending.ShufflePartner
 			g.pending = nil
 
 			if card.Type == CardTypeThief {
@@ -273,6 +294,23 @@ func (g *Game) TickInactive() bool {
 					stealable := g.stealableCardsFor(drawer, victim)
 					if len(stealable) > 0 {
 						g.applyThiefSteal(drawer, victim, stealable[0], card)
+						if g.Phase == PhasePlaying {
+							g.advanceTurn()
+						}
+					}
+				}
+			} else if card.Type == CardTypeShuffle {
+				if shufflePartner == nil {
+					targets := g.validShuffleTargets(drawer)
+					if len(targets) > 0 {
+						shufflePartner = g.playerByID(targets[0])
+					}
+				}
+				if shufflePartner != nil {
+					drawerNums := numberCardsOf(drawer)
+					partnerNums := numberCardsOf(shufflePartner)
+					if len(drawerNums) > 0 && len(partnerNums) > 0 {
+						g.applyShuffleSwap(drawer, shufflePartner, drawerNums[0], partnerNums[0], card)
 						if g.Phase == PhasePlaying {
 							g.advanceTurn()
 						}
@@ -401,9 +439,12 @@ func (g *Game) Target(sessionID, targetID string) error {
 
 	// Validate target is in the valid set for this card.
 	var validIDs []string
-	if g.pending.Card.Type == CardTypeThief {
+	switch g.pending.Card.Type {
+	case CardTypeThief:
 		validIDs = g.validThiefTargets(drawer)
-	} else {
+	case CardTypeShuffle:
+		validIDs = g.validShuffleTargets(drawer)
+	default:
 		validIDs = g.validTargetsFor(g.pending.Card)
 	}
 	valid := false
@@ -423,6 +464,13 @@ func (g *Game) Target(sessionID, targetID string) error {
 	if card.Type == CardTypeThief && g.pending.ThiefVictim == nil {
 		g.pending.ThiefVictim = target
 		g.Message = fmt.Sprintf("%s chose to steal from %s — pick a card!", drawer.Name, target.Name)
+		return nil
+	}
+
+	// Shuffle stage 1 → 2: partner chosen; await card pair selection via ShuffleSwap().
+	if card.Type == CardTypeShuffle && g.pending.ShufflePartner == nil {
+		g.pending.ShufflePartner = target
+		g.Message = fmt.Sprintf("%s chose to swap with %s — pick cards to exchange!", drawer.Name, target.Name)
 		return nil
 	}
 
@@ -475,6 +523,72 @@ func (g *Game) Steal(sessionID string, cardValue int) error {
 	thiefCard := g.pending.Card
 	g.pending = nil
 	g.applyThiefSteal(drawer, victim, chosen, thiefCard)
+
+	if g.Phase == PhasePlaying {
+		if g.deferredFor != nil {
+			g.processDeferredCards()
+		} else if g.inDealing {
+			g.continueDealing()
+		} else if !g.inDeferred {
+			g.advanceTurn()
+		}
+	}
+	return nil
+}
+
+// ShuffleSwap resolves the card-pair selection stage (stage 2) of a pending Shuffle action.
+// drawerCardValue is the drawer's number card value to give; partnerCardValue is the partner's.
+func (g *Game) ShuffleSwap(sessionID string, drawerCardValue, partnerCardValue int) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.Phase != PhasePlaying {
+		return fmt.Errorf("game is not in progress")
+	}
+	if g.pending == nil || g.pending.Card.Type != CardTypeShuffle {
+		return fmt.Errorf("no Shuffle action awaiting card selection")
+	}
+	if g.pending.ShufflePartner == nil {
+		return fmt.Errorf("choose a player to swap with first")
+	}
+	drawer := g.Players[g.pending.DrawerIdx]
+	if drawer.SessionID != sessionID {
+		return fmt.Errorf("it is not your action to resolve")
+	}
+
+	partner := g.pending.ShufflePartner
+
+	// Validate drawer's chosen card
+	var drawerCard Card
+	drawerFound := false
+	for _, c := range drawer.Cards {
+		if c.Type == CardTypeNumber && c.Value == drawerCardValue {
+			drawerCard = c
+			drawerFound = true
+			break
+		}
+	}
+	if !drawerFound {
+		return fmt.Errorf("you do not hold number card %d", drawerCardValue)
+	}
+
+	// Validate partner's chosen card
+	var partnerCard Card
+	partnerFound := false
+	for _, c := range partner.Cards {
+		if c.Type == CardTypeNumber && c.Value == partnerCardValue {
+			partnerCard = c
+			partnerFound = true
+			break
+		}
+	}
+	if !partnerFound {
+		return fmt.Errorf("%s does not hold number card %d", partner.Name, partnerCardValue)
+	}
+
+	shuffleCard := g.pending.Card
+	g.pending = nil
+	g.applyShuffleSwap(drawer, partner, drawerCard, partnerCard, shuffleCard)
 
 	if g.Phase == PhasePlaying {
 		if g.deferredFor != nil {
@@ -579,6 +693,22 @@ func (g *Game) State() GameState {
 				Card:           g.pending.Card,
 				DrawerID:       drawer.ID,
 				ValidTargetIDs: g.validThiefTargets(drawer),
+			}
+		case g.pending.Card.Type == CardTypeShuffle && g.pending.ShufflePartner != nil:
+			// Stage 2: partner chosen — show number cards for swap selection.
+			pendingState = &PendingActionState{
+				Card:                g.pending.Card,
+				DrawerID:            drawer.ID,
+				ShufflePartnerID:    g.pending.ShufflePartner.ID,
+				ShuffleDrawerCards:  numberCardsOf(drawer),
+				ShufflePartnerCards: numberCardsOf(g.pending.ShufflePartner),
+			}
+		case g.pending.Card.Type == CardTypeShuffle:
+			// Stage 1: choose partner to swap with.
+			pendingState = &PendingActionState{
+				Card:           g.pending.Card,
+				DrawerID:       drawer.ID,
+				ValidTargetIDs: g.validShuffleTargets(drawer),
 			}
 		default:
 			pendingState = &PendingActionState{
@@ -734,6 +864,18 @@ func (g *Game) dealCardTo(p *Player) {
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
 			g.Message = fmt.Sprintf("%s was dealt Thief — choose a player to steal from!", p.Name)
 		}
+
+	case CardTypeShuffle:
+		targets := g.validShuffleTargets(p)
+		if len(targets) == 0 {
+			g.logEvent("%s dealt Shuffle — no valid swap target, discarded", p.Name)
+			g.Message = fmt.Sprintf("%s was dealt Shuffle — no valid swap target, discarded.", p.Name)
+			g.UsedCards = append(g.UsedCards, card)
+		} else {
+			g.logEvent("%s dealt Shuffle — choosing target", p.Name)
+			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
+			g.Message = fmt.Sprintf("%s was dealt Shuffle — choose a player to swap with!", p.Name)
+		}
 	}
 }
 
@@ -835,6 +977,22 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
 			g.Message = fmt.Sprintf("%s drew Thief — choose a player to steal from!", p.Name)
 		}
+
+	case CardTypeShuffle:
+		if inFlip3 {
+			return []Card{card} // defer; don't resolve yet
+		}
+		targets := g.validShuffleTargets(p)
+		if len(targets) == 0 {
+			g.logEvent("%s drew Shuffle — no valid swap target, discarded", p.Name)
+			g.Message = fmt.Sprintf("%s drew Shuffle — no valid swap target, discarded.", p.Name)
+			g.UsedCards = append(g.UsedCards, card)
+			g.advanceTurn()
+		} else {
+			// Always pending: two-stage choice (partner, then card pair).
+			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
+			g.Message = fmt.Sprintf("%s drew Shuffle — choose a player to swap with!", p.Name)
+		}
 	}
 
 	return nil
@@ -926,6 +1084,21 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
 			g.advanceTurn()
 		}
+
+	case CardTypeShuffle:
+		// Auto-swap: take the first number card from each player.
+		drawerNums := numberCardsOf(drawer)
+		targetNums := numberCardsOf(target)
+		if len(drawerNums) > 0 && len(targetNums) > 0 {
+			g.applyShuffleSwap(drawer, target, drawerNums[0], targetNums[0], card)
+		} else {
+			g.UsedCards = append(g.UsedCards, card)
+			g.logEvent("%s Shuffle with %s — no cards to swap, discarded", drawer.Name, target.Name)
+			g.Message = fmt.Sprintf("%s used Shuffle with %s — no cards to swap, discarded.", drawer.Name, target.Name)
+		}
+		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
+			g.advanceTurn()
+		}
 	}
 }
 
@@ -970,7 +1143,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 		g.logEvent("  %s drew %s (Flip 3)", p.Name, card.Name)
 		g.Message = fmt.Sprintf("%s drew %s (Flip 3).", p.Name, card.Name)
 
-	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance, CardTypeThief:
+	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance, CardTypeThief, CardTypeShuffle:
 		return []Card{card}, false // defer; resolve after all 3 cards drawn
 	}
 
@@ -1046,6 +1219,23 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		g.UsedCards = append(g.UsedCards, card)
 		g.logEvent("  Thief (auto) — no stealable target, discarded")
 		g.Message = "Thief (deferred) — no valid target to steal from, discarded."
+
+	case CardTypeShuffle:
+		// Auto-swap: pick the first valid opponent and exchange first number cards.
+		for _, opp := range g.Players {
+			if opp == target || opp.Status != StatusActive {
+				continue
+			}
+			drawerNums := numberCardsOf(target)
+			partnerNums := numberCardsOf(opp)
+			if len(drawerNums) > 0 && len(partnerNums) > 0 {
+				g.applyShuffleSwap(target, opp, drawerNums[0], partnerNums[0], card)
+				return
+			}
+		}
+		g.UsedCards = append(g.UsedCards, card)
+		g.logEvent("  Shuffle (auto) — no valid swap target, discarded")
+		g.Message = "Shuffle (deferred) — no valid swap target, discarded."
 	}
 }
 
@@ -1283,4 +1473,70 @@ func (g *Game) nextActiveFromExcluding(from int, exclude *Player) int {
 		}
 	}
 	return -1
+}
+
+// ─── Shuffle helpers ──────────────────────────────────────────────────────────
+
+// numberCardsOf returns a copy of all number cards in p's hand.
+func numberCardsOf(p *Player) []Card {
+	var cards []Card
+	for _, c := range p.Cards {
+		if c.Type == CardTypeNumber {
+			cards = append(cards, c)
+		}
+	}
+	return cards
+}
+
+// validShuffleTargets returns IDs of active players (excluding drawer) who have
+// at least one number card, when the drawer also has at least one number card.
+func (g *Game) validShuffleTargets(drawer *Player) []string {
+	if len(numberCardsOf(drawer)) == 0 {
+		return nil
+	}
+	var ids []string
+	for _, p := range g.Players {
+		if p == drawer || p.Status != StatusActive {
+			continue
+		}
+		if len(numberCardsOf(p)) > 0 {
+			ids = append(ids, p.ID)
+		}
+	}
+	return ids
+}
+
+// applyShuffleSwap exchanges drawerCard and partnerCard between drawer and partner,
+// keeps the Shuffle card in drawer's hand as a visible marker, and triggers
+// Flip 7 if either player now holds 7 unique number cards.
+func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard, shuffleCard Card) {
+	// Remove drawer's card from drawer's hand.
+	for i, c := range drawer.Cards {
+		if c.Type == CardTypeNumber && c.Value == drawerCard.Value {
+			drawer.Cards = append(drawer.Cards[:i], drawer.Cards[i+1:]...)
+			break
+		}
+	}
+	// Remove partner's card from partner's hand.
+	for i, c := range partner.Cards {
+		if c.Type == CardTypeNumber && c.Value == partnerCard.Value {
+			partner.Cards = append(partner.Cards[:i], partner.Cards[i+1:]...)
+			break
+		}
+	}
+	// Cross-give the cards.
+	drawer.Cards = append(drawer.Cards, partnerCard)
+	partner.Cards = append(partner.Cards, drawerCard)
+	// Shuffle card stays in drawer's hand as a visible marker.
+	drawer.Cards = append(drawer.Cards, shuffleCard)
+
+	g.logEvent("%s used Shuffle — swapped %s with %s's %s", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
+	g.Message = fmt.Sprintf("%s used Shuffle — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
+
+	// Check Flip 7 for drawer first (they initiated the action), then partner.
+	if drawer.UniqueNumberCount() == 7 {
+		g.triggerFlip7(drawer)
+	} else if partner.UniqueNumberCount() == 7 {
+		g.triggerFlip7(partner)
+	}
 }

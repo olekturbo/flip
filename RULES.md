@@ -4,12 +4,12 @@ A faithful digital adaptation of the **Flip 7** card game by [The Op](https://th
 
 ---
 
-## Deck — 103 cards
+## Deck — 106 cards
 
 | Type | Cards |
 |------|-------|
 | Number cards | 0–12; card N appears N times (0 appears once) → **79 cards** |
-| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief → **12 cards** |
+| Action cards | 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief, 3× Shuffle → **15 cards** |
 | Positive modifier cards | +2, +4, +6, +8, +10, ×2 → **6 cards** |
 | Negative modifier cards | -2, -4, -6, -8, -10, ÷2 → **6 cards** |
 
@@ -36,7 +36,7 @@ Drawing a number you **already hold** = bust. You score **0** this round and are
 
 ## Action Cards
 
-When drawn you **choose any active player** to receive its effect (including yourself). If you're the only active player it targets you automatically.
+When drawn you choose a target to receive the effect. Most cards target any active player (including yourself). If you're the only active player it targets you automatically.
 
 ### Freeze
 Target banks their current points and exits the round immediately (they do not bust).
@@ -49,6 +49,9 @@ Target holds this card. If they would bust, discard both the duplicate and this 
 
 ### Thief
 Two-stage interaction: first choose a target player, then choose which of their number cards to steal. The chosen card moves from the target's hand to yours. You can only target players who hold at least one number card you don't already hold. If no valid target exists, Thief is discarded with no effect. Stealing the 7th unique number triggers Flip 7 immediately.
+
+### Shuffle
+Two-stage interaction: first choose any active opponent who holds at least one number card (you must also hold at least one). Then choose one of your number cards and one of theirs to swap — the two cards trade hands. If the swap gives you 7 unique number cards, Flip 7 triggers immediately. Discarded with no effect if no valid swap target exists.
 
 ---
 

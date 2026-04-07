@@ -146,6 +146,16 @@ function sndThief() {
   });
 }
 
+// Shuffle card — two-note crossing swish (cards trading places)
+function sndShuffle() {
+  play(ctx => {
+    const t = ctx.currentTime;
+    freqRamp(ctx, 'sine',     400, 900, t,        0.16, 0.18); // up
+    freqRamp(ctx, 'triangle', 900, 400, t + 0.06, 0.16, 0.18); // down (crossing)
+    osc(ctx, 'sine', 660, t + 0.18, 0.10, 0.12); // resolution click
+  });
+}
+
 // ── Mute toggle ───────────────────────────────────────────────────────────────
 function toggleMute() {
   muted = !muted;

@@ -100,6 +100,8 @@ func bddParseCard(s string) Card {
 		return SecondChanceCard()
 	case "Thief":
 		return ThiefCard()
+	case "Shuffle":
+		return ShuffleCard()
 	case "×2":
 		return ModifierMulCard()
 	case "÷2":
@@ -257,6 +259,16 @@ func (c *bddCtx) aliceSteals(cardValue int) error {
 func (c *bddCtx) bobSteals(cardValue int) error {
 	c.ensureGame()
 	return c.g.Steal("sb", cardValue)
+}
+
+func (c *bddCtx) aliceShuffles(myCard, theirCard int) error {
+	c.ensureGame()
+	return c.g.ShuffleSwap("sa", myCard, theirCard)
+}
+
+func (c *bddCtx) bobShuffles(myCard, theirCard int) error {
+	c.ensureGame()
+	return c.g.ShuffleSwap("sb", myCard, theirCard)
 }
 
 // ── step definitions — status (Given + Then) ─────────────────────────────────
@@ -517,6 +529,8 @@ func (c *bddCtx) register(sc *godog.ScenarioContext) {
 	sc.Step(`^Bob targets himself$`, c.bobTargetsSelf)
 	sc.Step(`^Alice steals (\d+)$`, c.aliceSteals)
 	sc.Step(`^Bob steals (\d+)$`, c.bobSteals)
+	sc.Step(`^Alice shuffles (\d+) for (\d+)$`, c.aliceShuffles)
+	sc.Step(`^Bob shuffles (\d+) for (\d+)$`, c.bobShuffles)
 
 	// Status assertions (not busted — separate from the combined Given/Then step)
 	sc.Step(`^Alice is not busted$`, c.aliceNotBusted)

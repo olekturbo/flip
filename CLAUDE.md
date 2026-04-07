@@ -15,12 +15,13 @@ Keep every description **exactly in sync** with the actual Go logic in `internal
 Specific sections to watch:
 | Game change | What to update |
 |---|---|
-| Deck composition (`deck.go`) | "Deck — 103 cards" in game.html/rules.html/RULES.md |
+| Deck composition (`deck.go`) | "Deck — 106 cards" in game.html/rules.html/RULES.md |
 | Scoring formula (`player.go RoundScore`) | "Modifier Cards" + "Scoring" in game.html/rules.html/RULES.md |
 | Freeze card effect | "Action Cards → Freeze" in game.html/rules.html/RULES.md |
 | Flip 3 card effect | "Action Cards → Flip 3" in game.html/rules.html/RULES.md + `flip3.feature` |
 | Second Chance card effect | "Action Cards → 2nd Chance" + "Busting" in game.html/rules.html/RULES.md + `second_chance.feature` |
 | Thief card effect | "Action Cards → Thief" in game.html/rules.html/RULES.md + `thief.feature` |
+| Shuffle card effect | "Action Cards → Shuffle" in game.html/rules.html/RULES.md + `shuffle.feature` |
 | Positive modifier cards (+2…+10, ×2) | "Modifier Cards" in game.html/rules.html/RULES.md |
 | Negative modifier cards (-2…-10, ÷2) | "Modifier Cards" in game.html/rules.html/RULES.md |
 | Flip 7 bonus (`triggerFlip7 / endRound`) | "Flip 7 Bonus" in game.html/rules.html/RULES.md + `flip7.feature` |
@@ -37,6 +38,7 @@ Every action card that resolves successfully **must remain visible in a player's
 | Flip 3 | Target's hand (orange marker) |
 | Second Chance | Target's hand until consumed (green marker; ghost animation on use) |
 | Thief (successful steal) | Drawer's hand (purple marker) |
+| Shuffle (successful swap) | Drawer's hand (teal marker) |
 
 When adding a new action card: ensure `applyXxx` adds the card to the relevant player's `Cards` slice (not `UsedCards`) so it renders automatically via `card-{type}` CSS. Only discard to `UsedCards` when the card has **no effect** (no valid target etc.) — in that case a ghost animation should be shown instead.
 
@@ -59,6 +61,7 @@ The BDD feature files in `internal/game/features/` are **living documentation** 
 | `flip3.feature` | 3 forced draws, stops on bust or Flip 7 only, deferred action resolution |
 | `flip7.feature` | 7 unique numbers ends round, +15 bonus, active players bank |
 | `thief.feature` | Two-stage steal: choose player then card; discarded when nothing to steal; Flip 7 on stolen 7th |
+| `shuffle.feature` | Two-stage swap: choose partner then card pair; discarded when no valid swap target; Flip 7 on swapped 7th |
 | `round_and_game.feature` | Score accumulation, win at 200+, tie continuation, bust at threshold |
 
 When adding a new mechanic, add a readable Gherkin scenario. When changing a mechanic, update the scenario to match.
@@ -69,9 +72,9 @@ Run `go test ./internal/game/...` and confirm all tests pass before committing. 
 
 These are the official rules this implementation is designed to match. Deviations are noted.
 
-### Deck — 103 cards
+### Deck — 106 cards
 - **Number cards (79):** values 0–12; card N appears N times (0 appears once).
-- **Action cards (12):** 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief.
+- **Action cards (15):** 3× Freeze, 3× Flip 3, 3× Second Chance, 3× Thief, 3× Shuffle.
 - **Positive modifier cards (6):** +2, +4, +6, +8, +10, ×2.
 - **Negative modifier cards (6):** -2, -4, -6, -8, -10, ÷2.
 - Deck carries over between rounds; reshuffled only when empty.
@@ -97,6 +100,12 @@ Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 - Thief can only target players who hold at least one number card the drawer does not already hold.
 - If no valid target exists (or nothing to steal), Thief is discarded with no effect.
 - Stealing the 7th unique number triggers Flip 7 immediately.
+
+### Shuffle
+- Two-stage interaction: first choose any active opponent who holds at least one number card (drawer must also hold at least one); then choose which of the drawer's number cards and which of the partner's number cards to swap.
+- The two chosen number cards trade hands.
+- If no valid partner exists, Shuffle is discarded with no effect.
+- Swapping the 7th unique number triggers Flip 7 immediately (drawer checked first).
 
 ### Negative modifiers
 - **-2 / -4 / -6 / -8 / -10** — subtracted from the final round score.

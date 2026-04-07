@@ -5,8 +5,8 @@ import "testing"
 func TestDeckComposition(t *testing.T) {
 	deck := NewDeck()
 
-	if len(deck) != 103 {
-		t.Fatalf("expected 103 cards, got %d", len(deck))
+	if len(deck) != 106 {
+		t.Fatalf("expected 106 cards, got %d", len(deck))
 	}
 
 	counts := map[CardType]int{}
@@ -35,7 +35,7 @@ func TestDeckComposition(t *testing.T) {
 	}
 
 	// Action cards: 3 each
-	for _, ct := range []CardType{CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance, CardTypeThief} {
+	for _, ct := range []CardType{CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance, CardTypeThief, CardTypeShuffle} {
 		if counts[ct] != 3 {
 			t.Errorf("%s: want 3, got %d", ct, counts[ct])
 		}

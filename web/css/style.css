@@ -363,6 +363,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 .card-modifier_sub  { background: #991b1b; color: #fecaca; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 .card-modifier_div  { background: #7c2d12; color: #fed7aa; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 .card-thief         { background: #1e293b; color: #94a3b8; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
+.card-shuffle       { background: #0369a1; color: #bae6fd; font-size: 0.75rem; text-align: center; line-height: 1.2; font-weight: 700; }
 
 /* ─── Target selection overlay ──────────────────────────────────────────────── */
 .targeting-overlay {
@@ -431,6 +432,19 @@ input[type="text"]:focus { border-color: var(--gold); }
   transform: translateY(-1px);
 }
 .btn-target:active { transform: translateY(0); }
+
+/* Shuffle swap-pair button: shows two cards with an arrow between them */
+.btn-swap-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+}
+.swap-arrow {
+  font-size: 1rem;
+  color: var(--gold);
+  flex-shrink: 0;
+}
 
 /* ─── Rules modal ───────────────────────────────────────────────────────────── */
 .rules-backdrop {
@@ -860,6 +874,25 @@ input[type="text"]:focus { border-color: var(--gold); }
   font-size: 1.05rem !important;
   text-decoration: line-through !important;
   animation: cardReveal 0.5s ease-out;
+}
+
+.ghost-shuffle-card {
+  background: rgba(3,105,161,0.88) !important;
+  color: #bae6fd !important;
+  border: 2px dashed #38bdf8 !important;
+  font-size: 1.05rem !important;
+  text-decoration: line-through !important;
+  animation: cardReveal 0.5s ease-out;
+}
+
+@keyframes shuffleFlash {
+  0%   { box-shadow: 0 0 0  0   rgba(186,230,253,0.9); border-color: #38bdf8; }
+  35%  { box-shadow: 0 0 0 22px rgba(186,230,253,0.25); border-color: #0ea5e9; }
+  100% { box-shadow: 0 0 0  0   rgba(186,230,253,0);   border-color: inherit; }
+}
+
+.just-shuffle {
+  animation: shuffleFlash 1.3s ease-out;
 }
 
 .ghost-card-exit {
