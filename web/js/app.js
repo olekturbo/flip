@@ -18,7 +18,7 @@ let countdownInterval = null; // 100ms RAF-style ticker for next-round countdown
 let roundEndedAtClient = null; // Date.now() calibrated to when round ended
 const AUTO_NEXT_MS = 4000;    // must match Go AutoNextRound
 let animBlockedUntil = 0;     // epoch ms — block turn controls until animations finish
-let _pendingActionSoundPlayed = false; // guard: play targeting sound only once per pending action
+let _lastPendingKey = null; // guard: play targeting-overlay sound only once per pending action
 
 // Per-player card reveal state (for Flip 3 stagger)
 const revealProgress = {}; // playerId → currently-visible card count
@@ -138,55 +138,165 @@ function handleMessage(msg) {
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
+
+// Banner colour palette (one place to update colours).
+const BANNER = {
+  bust:   'rgba(185,28,28,0.95)',
+  freeze: 'rgba(29,78,216,0.95)',
+  flip3:  'rgba(194,65,12,0.95)',
+  thief:  'rgba(109,40,217,0.95)',
+  stop:   'rgba(22,101,52,0.95)',
+  flip7:  'rgba(120,53,15,0.97)',
+  sc:     'rgba(5,120,80,0.95)',
+};
+
+// Spawn a ghost card inside a player's hand panel, then auto-fade it out.
+function spawnGhostCard(playerId, cssClass, label, title, delayMs = 0) {
+  setTimeout(() => {
+    const panel   = document.querySelector(`[data-player-id="${playerId}"]`);
+    const cardsEl = panel && panel.querySelector('.player-cards');
+    if (!cardsEl) return;
+    const ghost = document.createElement('div');
+    ghost.className   = `card ${cssClass}`;
+    ghost.textContent = String(label);
+    ghost.title       = title;
+    cardsEl.appendChild(ghost);
+    setTimeout(() => {
+      ghost.classList.add('ghost-card-exit');
+      setTimeout(() => ghost.remove(), 480);
+    }, 2500);
+  }, delayMs);
+}
+
+// Parse the server message and fire the appropriate banner + sound.
+// Single source of truth for all game-event notifications — called once
+// per message change so every event is handled exactly the same way.
+function handleGameEvent(msg) {
+  // Bust
+  if (msg.includes('BUSTED')) {
+    const m = msg.match(/^(.+?) (?:drew|was dealt) (\d+)/);
+    showActionBanner(
+      m ? `💥 ${m[1]} BUSTED — duplicate ${m[2]}!` : '💥 BUSTED!',
+      BANNER.bust
+    );
+    sndBust();
+    return;
+  }
+
+  // Second Chance saved a bust
+  if (msg.includes('Second Chance used')) {
+    const m = msg.match(/^(.+?) (?:drew|was dealt) (\d+)/);
+    if (!m) return;
+    const [, name, val] = m;
+    const player = gameState.players.find(p => p.name === name);
+    showActionBanner(`🛡️ ${name} — 2nd Chance saved from ${val}!`, BANNER.sc);
+    sndSecondChance();
+    if (player) {
+      setTimeout(() => {
+        const panel = document.querySelector(`[data-player-id="${player.id}"]`);
+        if (panel) {
+          panel.classList.add('just-second-chance');
+          panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
+        }
+      }, 80);
+      spawnGhostCard(player.id, 'ghost-bust-card', val,   `Would-be duplicate ${val}`, 80);
+      spawnGhostCard(player.id, 'ghost-sc-card',   '🛡️', '2nd Chance used',           80);
+    }
+    return;
+  }
+
+  // Freeze applied (direct or deferred)
+  if ((msg.includes('froze') || msg.includes('Freeze')) && msg.includes('banks')) {
+    const m = msg.match(/Freeze on (.+?) —/) ||
+              msg.match(/^(.+?) froze themselves/) ||
+              msg.match(/Freeze \(deferred\) — (.+?) banks/);
+    if (m) { showActionBanner(`❄️ ${m[1]} was frozen!`, BANNER.freeze); sndFreeze(); }
+    return;
+  }
+
+  // Flip 3 started (direct or deferred)
+  if (msg.includes('Flip 3') && (msg.includes('draws 3') || msg.includes('drawing 3'))) {
+    const m = msg.match(/Flip 3 on (.+?) —/) ||
+              msg.match(/^(.+?) drew Flip 3/) ||
+              msg.match(/Flip 3 \(deferred\) — (.+?) draws/);
+    if (m) { showActionBanner(`🎲 Flip 3 on ${m[1]}!`, BANNER.flip3); sndFlip3(); }
+    return;
+  }
+
+  // Thief steal succeeded
+  if (msg.includes('used Thief — stole')) {
+    const m = msg.match(/^(.+?) used Thief — stole (.+?) from/);
+    if (m) { showActionBanner(`🃏 ${m[1]} stole ${m[2]}!`, BANNER.thief); sndThief(); }
+    return;
+  }
+
+  // Thief discarded — all forms (normal draw, nothing to steal, deferred auto-discard)
+  if (msg.includes('Thief') && msg.includes('discarded')) {
+    const m  = msg.match(/^(.+?) (?:drew|dealt|used) Thief/);
+    const tp = m
+      ? gameState.players.find(p => p.name === m[1])
+      : gameState.players.find(p => p.cards.some(c => c.type === 'flip3')); // deferred
+    if (tp) {
+      showActionBanner(`🃏 ${tp.name} — Thief discarded (nothing to steal)`, BANNER.thief);
+      spawnGhostCard(tp.id, 'ghost-thief-card', '🃏', 'Thief — nothing to steal, discarded', 80);
+    }
+    return;
+  }
+
+  // Player stopped (voluntary or forced)
+  if (msg.includes('stopped with') || msg.includes('is forced to stop')) {
+    const m1 = msg.match(/^(.+?) stopped with (\d+)/);
+    const m2 = msg.match(/All cards drawn — (.+?) is forced to stop/);
+    if (m1) { showActionBanner(`🏦 ${m1[1]} stopped — ${m1[2]} pts`, BANNER.stop); sndStop(); }
+    else if (m2) { showActionBanner(`🏦 ${m2[1]} stopped`, BANNER.stop); sndStop(); }
+  }
+}
+
 function render() {
   if (!gameState) return;
 
-  // ── 1. Diff against previous state ────────────────────────────────────────
   const prevSnapshot = prevPlayers.slice();
+  const curMsg       = gameState.message || '';
 
-  // Detect a round transition: prevPlayers still holds the previous round's
-  // card counts. On a new round all cards are fresh, so prevCount must be 0
-  // for every player — otherwise Flip 3 stagger / bust timing breaks because
-  // newCount is computed against stale old-round card counts.
+  // Detect round transition — prevPlayers still holds the previous round's card
+  // counts; on a new round treat every player's prevCount as 0.
   const isNewRound = prevSnapshot.length > 0 &&
     prevSnapshot[0].roundNumber !== undefined &&
     prevSnapshot[0].roundNumber !== gameState.roundNumber;
 
+  // ── 1. Message-driven banners + sounds ─────────────────────────────────────
+  // Single code path for all game events — no duplicated banner logic.
+  if (curMsg !== prevMessage) {
+    handleGameEvent(curMsg);
+  }
+
+  // ── 2. Card-arrival animations ─────────────────────────────────────────────
   gameState.players.forEach(p => {
     const prev      = prevSnapshot.find(pp => pp.id === p.id);
     const prevCount = isNewRound ? 0 : (prev ? prev.cards.length : 0);
-    const prevStat  = isNewRound ? null : (prev ? prev.status : null);
     const newCount  = p.cards.length - prevCount;
-
-    // Card arrival: start staggered reveal (or instant for single draws).
-    // Guard with prev so reconnecting to an existing game doesn't replay animations.
     if (prev && newCount > 0 && revealProgress[p.id] === undefined) {
       startCardReveals(p, prevCount);
       if (newCount === 1) sndCardDraw();
     }
+  });
 
-    // Multi-card arrival banner: 2+ new cards is either Flip 3 or a Thief steal
-    // (steal adds stolen card + Thief card itself). Distinguish by card type.
-    // Guard with prev to avoid false positives on reconnect.
-    if (prev && newCount >= 2) {
-      const newCards = p.cards.slice(prevCount);
-      if (newCards.some(c => c.type === 'thief')) {
-        const stolen = newCards.find(c => c.type === 'number');
-        const stolenLabel = stolen != null ? stolen.value : '?';
-        showActionBanner(`🃏 ${p.name} — stole ${stolenLabel}!`, 'rgba(109,40,217,0.95)');
-        sndThief();
-      } else {
-        showActionBanner(`🎲 Flip 3 on ${p.name}!`, 'rgba(194,65,12,0.95)');
-        sndFlip3();
-      }
+  // ── 3. State-diff events ───────────────────────────────────────────────────
+  gameState.players.forEach(p => {
+    const prev     = prevSnapshot.find(pp => pp.id === p.id);
+    const prevStat = isNewRound ? null : (prev ? prev.status : null);
+
+    // Flip 7 bonus — triggerFlip7 ends the round immediately with no playing-phase
+    // message; detect via roundBonus appearing in the round_end state.
+    if (prev && p.roundBonus > 0 && !prev.roundBonus) {
+      showActionBanner(`🎉 ${p.name} — FLIP 7! +${p.roundBonus} bonus!`, BANNER.flip7);
+      sndFlip7();
     }
 
-    // Status transition animations (run after grid is in DOM, hence setTimeout)
+    // Status visual effects — DOM classes only; banner + sound come from handleGameEvent.
     if (prevStat && prevStat !== p.status) {
-      const pid = p.id, pname = p.name;
+      const pid = p.id;
       if (p.status === 'frozen') {
-        showActionBanner(`❄️ ${pname} was frozen!`, 'rgba(29,78,216,0.95)');
-        sndFreeze();
         setTimeout(() => {
           const panel = document.querySelector(`[data-player-id="${pid}"]`);
           if (panel) {
@@ -195,120 +305,29 @@ function render() {
           }
         }, 80);
       }
-      if (p.status === 'stopped') {
-        const pts = p.roundScore != null ? p.roundScore : '?';
-        showActionBanner(`🏦 ${pname} stopped — ${pts} pts`, 'rgba(22,101,52,0.95)');
-        sndStop();
-      }
       if (p.status === 'busted') {
-        // If Flip 3 stagger is in progress, delay banner/shake to coincide with
-        // the bust card being revealed (last card of the stagger).
-        const bustCard = p.cards[p.cards.length - 1];
-        const bustDelay = revealProgress[pid] !== undefined
-          ? 500 + (newCount - 1) * 950 + 80   // wait for last stagger card
-          : 80;
-        blockTurnFor(bustDelay + 1800); // hold next player's controls until bust is visible
-        const bustVal = bustCard && bustCard.type === 'number' ? bustCard.value : null;
-        const bustLabel = bustVal !== null
-          ? `💥 ${pname} BUSTED — duplicate ${bustVal}!`
-          : `💥 ${pname} BUSTED!`;
+        blockTurnFor(1800);
         setTimeout(() => {
-          showActionBanner(bustLabel, 'rgba(185,28,28,0.95)');
-          sndBust();
           const panel = document.querySelector(`[data-player-id="${pid}"]`);
-          if (panel) {
-            panel.classList.add('just-busted');
-            panel.addEventListener('animationend', () => panel.classList.remove('just-busted'), { once: true });
-            // Ghost card: show the duplicate that caused the bust, then fade out
-            if (bustVal !== null) {
-              const cardsEl = panel.querySelector('.player-cards');
-              if (cardsEl) {
-                const ghostBust = document.createElement('div');
-                ghostBust.className = 'card ghost-bust-card';
-                ghostBust.textContent = bustVal;
-                ghostBust.title = `Duplicate ${bustVal} — BUSTED`;
-                cardsEl.appendChild(ghostBust);
-                setTimeout(() => {
-                  ghostBust.classList.add('ghost-card-exit');
-                  setTimeout(() => ghostBust.remove(), 480);
-                }, 2500);
-              }
-            }
+          if (!panel) return;
+          panel.classList.add('just-busted');
+          panel.addEventListener('animationend', () => panel.classList.remove('just-busted'), { once: true });
+          // Ghost: the duplicate card that caused the bust
+          const bustCard = p.cards[p.cards.length - 1];
+          if (bustCard && bustCard.type === 'number') {
+            spawnGhostCard(pid, 'ghost-bust-card', bustCard.value, `Duplicate ${bustCard.value} — BUSTED`);
           }
-        }, bustDelay);
+          // Fallback banner for the rare dealing-phase bust that has no BUSTED message
+          if (!curMsg.includes('BUSTED')) {
+            showActionBanner(`💥 ${p.name} BUSTED!`, BANNER.bust);
+            sndBust();
+          }
+        }, 80);
       }
-    }
-
-    // Flip 7 bonus earned
-    if (prev && p.roundBonus > 0 && !prev.roundBonus) {
-      showActionBanner(`🎉 ${p.name} — FLIP 7! +${p.roundBonus} bonus!`, 'rgba(120,53,15,0.97)');
-      sndFlip7();
-    }
-
-    // Second Chance consumed: hasSecondChance flipped true→false while player
-    // was already active and within the same round (guards against false positive
-    // on round transition where ResetForRound zeroes SC while prevPlayers still
-    // holds the old value from the previous round).
-    if (prev && prev.hasSecondChance && !p.hasSecondChance &&
-        prevStat === 'active' && p.status === 'active' &&
-        prev.roundNumber === gameState.roundNumber) {
-      const pid = p.id, pname = p.name;
-      // Parse the duplicate value from the message (e.g. "drew 9 (duplicate!)")
-      const scMatch = gameState.message.match(/(?:drew|dealt) (\d+)/);
-      const savedVal = scMatch ? scMatch[1] : '?';
-
-      showActionBanner(`🛡️ ${pname} — 2nd Chance saved from ${savedVal}!`, 'rgba(5,120,80,0.95)');
-      sndSecondChance();
-
-      // Inject ghost cards into the player's hand so the event is clear visually.
-      setTimeout(() => {
-        const panel = document.querySelector(`[data-player-id="${pid}"]`);
-        if (!panel) return;
-        const cardsEl = panel.querySelector('.player-cards');
-        if (!cardsEl) return;
-
-        // Ghost: the would-be bust card (red, crossed out)
-        const ghostBust = document.createElement('div');
-        ghostBust.className = 'card ghost-bust-card';
-        ghostBust.textContent = savedVal;
-        ghostBust.title = `Would-be duplicate ${savedVal}`;
-        cardsEl.appendChild(ghostBust);
-
-        // Ghost: the consumed SC card (green shield)
-        const ghostSC = document.createElement('div');
-        ghostSC.className = 'card ghost-sc-card';
-        ghostSC.textContent = '🛡️';
-        ghostSC.title = '2nd Chance used';
-        cardsEl.appendChild(ghostSC);
-
-        // Panel glow
-        panel.classList.add('just-second-chance');
-        panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
-
-        // Fade both ghost cards out after 2.5s
-        setTimeout(() => {
-          ghostBust.classList.add('ghost-card-exit');
-          ghostSC.classList.add('ghost-card-exit');
-          setTimeout(() => { ghostBust.remove(); ghostSC.remove(); }, 480);
-        }, 2500);
-      }, 80);
     }
   });
 
-  // ── 2. Static UI updates ───────────────────────────────────────────────────
-  el('hdr-round').textContent = gameState.roundNumber || '—';
-  el('hdr-deck').textContent  = gameState.deckSize !== undefined ? gameState.deckSize : '—';
-  const deckCountEl = el('deck-pile-count');
-  if (deckCountEl) deckCountEl.textContent = (gameState.deckSize || 0) + ' cards';
-
-  el('message-bar').textContent = gameState.message || '';
-  updateEventLog(gameState.events);
-
-  // ── 3. Render players (respects revealProgress for card visibility) ────────
-  renderPlayersGrid();
-
-  // ── 4. card-new animation for single-draw cards ────────────────────────────
-  // (Multi-card stagger is handled inside startCardReveals)
+  // ── 4. card-new highlight on single draws ──────────────────────────────────
   gameState.players.forEach(p => {
     const prev      = prevSnapshot.find(pp => pp.id === p.id);
     const prevCount = isNewRound ? 0 : (prev ? prev.cards.length : 0);
@@ -317,8 +336,8 @@ function render() {
         const panel = document.querySelector(`[data-player-id="${p.id}"]`);
         if (!panel) return;
         const cards = panel.querySelectorAll('.card:not(.card-bust-marker)');
-        if (cards.length > 0) {
-          const last = cards[cards.length - 1];
+        const last  = cards[cards.length - 1];
+        if (last) {
           last.classList.add('card-new');
           last.addEventListener('animationend', () => last.classList.remove('card-new'), { once: true });
         }
@@ -326,57 +345,23 @@ function render() {
     }
   });
 
-  // ── 5. Thief discarded with no effect — ghost card animation ─────────────
-  const curMsg = gameState.message || '';
-  if (curMsg !== prevMessage) {
-    // Normal discard: "X drew/dealt/used Thief … discarded."
-    // Matches: "X drew Thief — no card to steal, discarded."
-    //          "X dealt Thief — no valid target, discarded."
-    //          "X used Thief on Y — nothing to steal, discarded."
-    const thiefDiscardMatch = curMsg.match(/^(.+?) (?:drew|dealt|used) Thief(?: on .+?)? — (?:no card to steal|no valid target|nothing to steal), discarded/);
-
-    // Deferred discard (Thief drawn during Flip 3, auto-resolved with no target):
-    // "Thief (deferred from Flip 3) — no valid target to steal from, discarded."
-    // "Thief (deferred) — no valid target to steal from, discarded."
-    const deferredThiefDiscard = !thiefDiscardMatch &&
-      /^Thief \(deferred/.test(curMsg) && curMsg.includes('discarded');
-
-    if (thiefDiscardMatch || deferredThiefDiscard) {
-      // For normal discards the player is named; for deferred ones identify
-      // the Flip 3 target by finding whoever has a flip3 card in their hand.
-      let targetPlayer;
-      if (thiefDiscardMatch) {
-        const drawerName = thiefDiscardMatch[1];
-        targetPlayer = gameState.players.find(p => p.name === drawerName);
-      } else {
-        targetPlayer = gameState.players.find(p =>
-          p.cards && p.cards.some(c => c.type === 'flip3'));
-      }
-
-      if (targetPlayer) {
-        showActionBanner(`🃏 ${targetPlayer.name} — Thief discarded (nothing to steal)`, 'rgba(109,40,217,0.95)');
-        setTimeout(() => {
-          const panel = document.querySelector(`[data-player-id="${targetPlayer.id}"]`);
-          if (!panel) return;
-          const cardsEl = panel.querySelector('.player-cards');
-          if (!cardsEl) return;
-          const ghostThief = document.createElement('div');
-          ghostThief.className = 'card ghost-thief-card';
-          ghostThief.textContent = '🃏';
-          ghostThief.title = 'Thief — nothing to steal, discarded';
-          cardsEl.appendChild(ghostThief);
-          setTimeout(() => {
-            ghostThief.classList.add('ghost-card-exit');
-            setTimeout(() => ghostThief.remove(), 480);
-          }, 2500);
-        }, 80);
-      }
-    }
-  }
-
-  // ── 6. Persist snapshot (includes status for next diff) ───────────────────
+  // ── 5. Snapshot + static UI ────────────────────────────────────────────────
   prevMessage = curMsg;
-  prevPlayers = gameState.players.map(p => ({ id: p.id, cards: [...p.cards], status: p.status, hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0, roundNumber: gameState.roundNumber }));
+  prevPlayers = gameState.players.map(p => ({
+    id: p.id, cards: [...p.cards], status: p.status,
+    hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0,
+    roundNumber: gameState.roundNumber,
+  }));
+
+  el('hdr-round').textContent = gameState.roundNumber || '—';
+  el('hdr-deck').textContent  = gameState.deckSize !== undefined ? gameState.deckSize : '—';
+  const deckCountEl = el('deck-pile-count');
+  if (deckCountEl) deckCountEl.textContent = (gameState.deckSize || 0) + ' cards';
+  el('message-bar').textContent = gameState.message || '';
+  updateEventLog(gameState.events);
+
+  // ── 6. Render players ──────────────────────────────────────────────────────
+  renderPlayersGrid();
 
   // Phase-specific UI
   hideAllOverlays();
@@ -514,10 +499,10 @@ function renderPlaying() {
 
       const labelMap = { freeze: 'Freeze', flip3: 'Flip 3', second_chance: '2nd Chance', thief: 'Thief' };
       const cardLabel = labelMap[pa.card.type] || pa.card.name;
-      if (!_pendingActionSoundPlayed) {
-        _pendingActionSoundPlayed = true;
-        const soundMap = { freeze: sndFreeze, flip3: sndFlip3, second_chance: sndSecondChance, thief: sndThief };
-        (soundMap[pa.card.type] || sndActionCard)();
+      const paKey = pa.drawerID + ':' + pa.card.type;
+      if (_lastPendingKey !== paKey) {
+        _lastPendingKey = paKey;
+        sndActionCard();
       }
       el('targeting-card-name').textContent = `You drew: ${cardLabel}`;
 
@@ -557,7 +542,7 @@ function renderPlaying() {
     return;
   }
 
-  _pendingActionSoundPlayed = false; // no active pending action — reset for next draw
+  _lastPendingKey = null; // no active pending action — reset for next draw
 
   if (myTurn) {
     const remaining = animBlockedUntil - Date.now();
