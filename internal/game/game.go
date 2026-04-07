@@ -146,12 +146,12 @@ func (g *Game) processDeferredCards() {
 		if dc.Type == CardTypeShuffle {
 			targets := g.validShuffleTargets(p)
 			if len(targets) == 0 {
-				g.logEvent("  Shuffle (deferred) — no valid swap target, discarded")
-				g.Message = "Shuffle (deferred from Flip 3) — no valid swap target, discarded."
+				g.logEvent("  Swap (deferred) — no valid swap target, discarded")
+				g.Message = "Swap (deferred from Flip 3) — no valid swap target, discarded."
 				g.UsedCards = append(g.UsedCards, dc)
 			} else {
 				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
-				g.Message = fmt.Sprintf("%s drew Shuffle during Flip 3 — choose a player to swap with!", p.Name)
+				g.Message = fmt.Sprintf("%s drew Swap during Flip 3 — choose a player to swap with!", p.Name)
 				return
 			}
 			continue
@@ -546,7 +546,7 @@ func (g *Game) ShuffleSwap(sessionID string, drawerCardValue, partnerCardValue i
 		return fmt.Errorf("game is not in progress")
 	}
 	if g.pending == nil || g.pending.Card.Type != CardTypeShuffle {
-		return fmt.Errorf("no Shuffle action awaiting card selection")
+		return fmt.Errorf("no Swap action awaiting card selection")
 	}
 	if g.pending.ShufflePartner == nil {
 		return fmt.Errorf("choose a player to swap with first")
@@ -868,13 +868,13 @@ func (g *Game) dealCardTo(p *Player) {
 	case CardTypeShuffle:
 		targets := g.validShuffleTargets(p)
 		if len(targets) == 0 {
-			g.logEvent("%s dealt Shuffle — no valid swap target, discarded", p.Name)
-			g.Message = fmt.Sprintf("%s was dealt Shuffle — no valid swap target, discarded.", p.Name)
+			g.logEvent("%s dealt Swap — no valid swap target, discarded", p.Name)
+			g.Message = fmt.Sprintf("%s was dealt Swap — no valid swap target, discarded.", p.Name)
 			g.UsedCards = append(g.UsedCards, card)
 		} else {
-			g.logEvent("%s dealt Shuffle — choosing target", p.Name)
+			g.logEvent("%s dealt Swap — choosing target", p.Name)
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
-			g.Message = fmt.Sprintf("%s was dealt Shuffle — choose a player to swap with!", p.Name)
+			g.Message = fmt.Sprintf("%s was dealt Swap — choose a player to swap with!", p.Name)
 		}
 	}
 }
@@ -984,14 +984,14 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		}
 		targets := g.validShuffleTargets(p)
 		if len(targets) == 0 {
-			g.logEvent("%s drew Shuffle — no valid swap target, discarded", p.Name)
-			g.Message = fmt.Sprintf("%s drew Shuffle — no valid swap target, discarded.", p.Name)
+			g.logEvent("%s drew Swap — no valid swap target, discarded", p.Name)
+			g.Message = fmt.Sprintf("%s drew Swap — no valid swap target, discarded.", p.Name)
 			g.UsedCards = append(g.UsedCards, card)
 			g.advanceTurn()
 		} else {
 			// Always pending: two-stage choice (partner, then card pair).
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
-			g.Message = fmt.Sprintf("%s drew Shuffle — choose a player to swap with!", p.Name)
+			g.Message = fmt.Sprintf("%s drew Swap — choose a player to swap with!", p.Name)
 		}
 	}
 
@@ -1093,8 +1093,8 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.applyShuffleSwap(drawer, target, drawerNums[0], targetNums[0], card)
 		} else {
 			g.UsedCards = append(g.UsedCards, card)
-			g.logEvent("%s Shuffle with %s — no cards to swap, discarded", drawer.Name, target.Name)
-			g.Message = fmt.Sprintf("%s used Shuffle with %s — no cards to swap, discarded.", drawer.Name, target.Name)
+			g.logEvent("%s Swap with %s — no cards to swap, discarded", drawer.Name, target.Name)
+			g.Message = fmt.Sprintf("%s used Swap with %s — no cards to swap, discarded.", drawer.Name, target.Name)
 		}
 		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
 			g.advanceTurn()
@@ -1234,8 +1234,8 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 			}
 		}
 		g.UsedCards = append(g.UsedCards, card)
-		g.logEvent("  Shuffle (auto) — no valid swap target, discarded")
-		g.Message = "Shuffle (deferred) — no valid swap target, discarded."
+		g.logEvent("  Swap (auto) — no valid swap target, discarded")
+		g.Message = "Swap (deferred) — no valid swap target, discarded."
 	}
 }
 
@@ -1530,8 +1530,8 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 	// Shuffle card stays in drawer's hand as a visible marker.
 	drawer.Cards = append(drawer.Cards, shuffleCard)
 
-	g.logEvent("%s used Shuffle — swapped %s with %s's %s", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
-	g.Message = fmt.Sprintf("%s used Shuffle — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
+	g.logEvent("%s used Swap — swapped %s with %s's %s", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
+	g.Message = fmt.Sprintf("%s used Swap — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
 
 	// Check Flip 7 for drawer first (they initiated the action), then partner.
 	if drawer.UniqueNumberCount() == 7 {

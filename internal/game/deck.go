@@ -5,7 +5,7 @@ import "math/rand"
 // NewDeck returns a freshly shuffled 106-card Flip 7 deck:
 //
 //	Number cards: 0 → 1 copy, N → N copies (N = 1..12)              →  79 cards
-//	3× Freeze, 3× Flip Three, 3× Second Chance, 3× Thief, 3× Shuffle → 15 cards
+//	3× Freeze, 3× Flip Three, 3× Second Chance, 3× Thief, 3× Swap    → 15 cards
 //	+2, +4, +6, +8, +10, ×2                                          →   6 cards
 //	-2, -4, -6, -8, -10, ÷2                                          →   6 cards
 //

@@ -21,7 +21,7 @@ Specific sections to watch:
 | Flip 3 card effect | "Action Cards → Flip 3" in game.html/rules.html/RULES.md + `flip3.feature` |
 | Second Chance card effect | "Action Cards → 2nd Chance" + "Busting" in game.html/rules.html/RULES.md + `second_chance.feature` |
 | Thief card effect | "Action Cards → Thief" in game.html/rules.html/RULES.md + `thief.feature` |
-| Swap card effect | "Action Cards → Swap" in game.html/rules.html/RULES.md + `shuffle.feature` |
+| Swap card effect | "Action Cards → Swap" in game.html/rules.html/RULES.md + `swap.feature` |
 | Positive modifier cards (+2…+10, ×2) | "Modifier Cards" in game.html/rules.html/RULES.md |
 | Negative modifier cards (-2…-10, ÷2) | "Modifier Cards" in game.html/rules.html/RULES.md |
 | Flip 7 bonus (`triggerFlip7 / endRound`) | "Flip 7 Bonus" in game.html/rules.html/RULES.md + `flip7.feature` |
@@ -61,7 +61,7 @@ The BDD feature files in `internal/game/features/` are **living documentation** 
 | `flip3.feature` | 3 forced draws, stops on bust or Flip 7 only, deferred action resolution |
 | `flip7.feature` | 7 unique numbers ends round, +15 bonus, active players bank |
 | `thief.feature` | Two-stage steal: choose player then card; discarded when nothing to steal; Flip 7 on stolen 7th |
-| `shuffle.feature` | Two-stage swap: choose partner then card pair; discarded when no valid swap target; Flip 7 on swapped 7th |
+| `swap.feature` | Two-stage swap: choose partner then card pair; discarded when no valid swap target; Flip 7 on swapped 7th |
 | `round_and_game.feature` | Score accumulation, win at 200+, tie continuation, bust at threshold |
 
 When adding a new mechanic, add a readable Gherkin scenario. When changing a mechanic, update the scenario to match.
