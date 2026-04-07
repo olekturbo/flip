@@ -127,7 +127,18 @@ func (g *Game) emit(e GameEvent) {
 	g.lastEvent = &e
 }
 
-// logEvent appends a message to the event history (capped at 300 entries, oldest dropped first).
+// msg logs the event AND sets the message bar to the same text.
+func (g *Game) msg(format string, args ...interface{}) {
+	text := fmt.Sprintf(format, args...)
+	g.events = append(g.events, text)
+	if len(g.events) > 300 {
+		g.events = g.events[len(g.events)-300:]
+	}
+	g.Message = text
+}
+
+// logEvent appends to the event history without changing the message bar.
+// Use only for structural log entries (e.g. round separators).
 func (g *Game) logEvent(format string, args ...interface{}) {
 	g.events = append(g.events, fmt.Sprintf(format, args...))
 	if len(g.events) > 300 {
@@ -156,13 +167,12 @@ func (g *Game) processDeferredCards() {
 		if dc.Type == CardTypeThief {
 			thiefTargets := g.validThiefTargets(p)
 			if len(thiefTargets) == 0 {
-				g.logEvent("  Thief (deferred) — no valid target, discarded")
-				g.Message = "Thief (deferred from Flip 3) — no valid target to steal from, discarded."
+				g.msg("Thief (deferred from Flip 3) — no valid target, discarded.")
 				g.emit(GameEvent{Type: "thief_discarded", PlayerID: p.ID})
 				g.UsedCards = append(g.UsedCards, dc)
 			} else {
 				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
-				g.Message = fmt.Sprintf("%s drew Thief during Flip 3 — choose a player to steal from!", p.Name)
+				g.msg("%s drew Thief during Flip 3 — choose a player to steal from!", p.Name)
 				return
 			}
 			continue
@@ -172,13 +182,12 @@ func (g *Game) processDeferredCards() {
 		if dc.Type == CardTypeShuffle {
 			targets := g.validShuffleTargets(p)
 			if len(targets) == 0 {
-				g.logEvent("  Swap (deferred) — no valid swap target, discarded")
-				g.Message = "Swap (deferred from Flip 3) — no valid swap target, discarded."
+				g.msg("Swap (deferred from Flip 3) — no valid swap target, discarded.")
 				g.emit(GameEvent{Type: "swap_discarded", PlayerID: p.ID})
 				g.UsedCards = append(g.UsedCards, dc)
 			} else {
 				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
-				g.Message = fmt.Sprintf("%s drew Swap during Flip 3 — choose a player to swap with!", p.Name)
+				g.msg("%s drew Swap during Flip 3 — choose a player to swap with!", p.Name)
 				return
 			}
 			continue
@@ -187,14 +196,13 @@ func (g *Game) processDeferredCards() {
 		targets := g.validTargetsFor(dc)
 		switch len(targets) {
 		case 0:
-			g.logEvent("  %s (deferred) — no valid target, discarded", dc.Name)
-			g.Message = fmt.Sprintf("%s (deferred from Flip 3) — no valid target, discarded.", dc.Name)
+			g.msg("%s (deferred from Flip 3) — no valid target, discarded.", dc.Name)
 		case 1:
 			g.resolveActionWithTarget(p, dc, g.playerByID(targets[0]))
 		default:
 			// Require player choice — pause until Target() is called.
 			g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
-			g.Message = fmt.Sprintf("%s drew %s during Flip 3 — choose a target!", p.Name, dc.Name)
+			g.msg("%s drew %s during Flip 3 — choose a target!", p.Name, dc.Name)
 			return
 		}
 	}
@@ -355,8 +363,7 @@ func (g *Game) TickInactive() bool {
 
 	cp = g.currentPlayer()
 	if cp != nil && cp.Status == StatusInactive && g.pending == nil {
-		g.logEvent("%s is inactive — turn skipped", cp.Name)
-		g.Message = fmt.Sprintf("%s is inactive — turn skipped.", cp.Name)
+		g.msg("%s is inactive — turn skipped.", cp.Name)
 		g.advanceTurn()
 		changed = true
 	}
@@ -437,8 +444,7 @@ func (g *Game) Stop(sessionID string) error {
 		return fmt.Errorf("you cannot stop right now")
 	}
 	cp.Status = StatusStopped
-	g.logEvent("%s stopped — %d pts", cp.Name, cp.RoundScore())
-	g.Message = fmt.Sprintf("%s stopped with %d round points.", cp.Name, cp.RoundScore())
+	g.msg("%s stopped — %d pts.", cp.Name, cp.RoundScore())
 	g.emit(GameEvent{Type: "stop", PlayerID: cp.ID, Score: cp.RoundScore()})
 	g.advanceTurn()
 	return nil
@@ -491,14 +497,14 @@ func (g *Game) Target(sessionID, targetID string) error {
 	// Thief stage 1 → 2: victim chosen; await card selection via Steal().
 	if card.Type == CardTypeThief && g.pending.ThiefVictim == nil {
 		g.pending.ThiefVictim = target
-		g.Message = fmt.Sprintf("%s chose to steal from %s — pick a card!", drawer.Name, target.Name)
+		g.msg("%s chose to steal from %s — pick a card!", drawer.Name, target.Name)
 		return nil
 	}
 
 	// Shuffle stage 1 → 2: partner chosen; await card pair selection via ShuffleSwap().
 	if card.Type == CardTypeShuffle && g.pending.ShufflePartner == nil {
 		g.pending.ShufflePartner = target
-		g.Message = fmt.Sprintf("%s chose to swap with %s — pick cards to exchange!", drawer.Name, target.Name)
+		g.msg("%s chose to swap with %s — pick cards to exchange!", drawer.Name, target.Name)
 		return nil
 	}
 
@@ -653,7 +659,7 @@ func (g *Game) Restart(sessionID string) error {
 	g.deferredCards = nil
 	g.deferredFor = nil
 	g.deferredAdvance = false
-	g.Message = "Game reset — waiting for the host to start."
+	g.msg("Game reset — waiting for the host to start.")
 	for _, p := range g.Players {
 		p.TotalScore = 0
 		p.Cards = make([]Card, 0)
@@ -807,7 +813,7 @@ func (g *Game) startRound() {
 	}
 
 	g.logEvent("── Round %d ──", g.RoundNumber)
-	g.Message = fmt.Sprintf("Round %d — dealing initial cards...", g.RoundNumber)
+	g.msg("Round %d — dealing initial cards...", g.RoundNumber)
 	g.continueDealing()
 }
 
@@ -836,10 +842,10 @@ func (g *Game) finishDealing() {
 	if g.CurrentIndex < 0 {
 		g.Phase = PhaseRoundEnd
 		g.roundEndedAt = time.Now()
-		g.Message = "No active players — round skipped."
+		g.msg("No active players — round skipped.")
 		return
 	}
-	g.Message = fmt.Sprintf("Round %d — %s's turn.", g.RoundNumber, g.currentPlayer().Name)
+	g.msg("Round %d — %s's turn.", g.RoundNumber, g.currentPlayer().Name)
 }
 
 // dealCardTo deals one starting card to p during the dealing phase.
@@ -854,13 +860,12 @@ func (g *Game) dealCardTo(p *Player) {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("%s survived dealing bust with 2nd Chance (dealt %d)", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s was dealt %d (duplicate!) — Second Chance used!", p.Name, card.Value)
+				g.msg("%s was dealt %d — Second Chance saved the bust!", p.Name, card.Value)
 				g.emit(GameEvent{Type: "second_chance", PlayerID: p.ID, CardValue: card.Value})
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
-				g.logEvent("%s dealt %d — BUSTED (duplicate)", p.Name, card.Value)
+				g.msg("%s was dealt %d — BUSTED!", p.Name, card.Value)
 				g.emit(GameEvent{Type: "bust", PlayerID: p.ID, CardValue: card.Value})
 			}
 		} else {
@@ -874,40 +879,34 @@ func (g *Game) dealCardTo(p *Player) {
 		targets := g.validTargetsFor(card)
 		switch len(targets) {
 		case 0:
-			g.logEvent("%s dealt %s — no valid target, discarded", p.Name, card.Name)
-			g.Message = fmt.Sprintf("%s was dealt %s — no valid target, discarded.", p.Name, card.Name)
+			g.msg("%s was dealt %s — no valid target, discarded.", p.Name, card.Name)
 		case 1:
 			g.resolveActionWithTarget(p, card, g.playerByID(targets[0]))
 		default:
-			g.logEvent("%s dealt %s — choosing target", p.Name, card.Name)
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
-			g.Message = fmt.Sprintf("%s was dealt %s — choose a target!", p.Name, card.Name)
+			g.msg("%s was dealt %s — choose a target!", p.Name, card.Name)
 		}
 
 	case CardTypeThief:
 		targets := g.validThiefTargets(p)
 		if len(targets) == 0 {
-			g.logEvent("%s dealt Thief — no valid target, discarded", p.Name)
-			g.Message = fmt.Sprintf("%s was dealt Thief — no valid target, discarded.", p.Name)
+			g.msg("%s was dealt Thief — no valid target, discarded.", p.Name)
 			g.emit(GameEvent{Type: "thief_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 		} else {
-			g.logEvent("%s dealt Thief — choosing target", p.Name)
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
-			g.Message = fmt.Sprintf("%s was dealt Thief — choose a player to steal from!", p.Name)
+			g.msg("%s was dealt Thief — choose a player to steal from!", p.Name)
 		}
 
 	case CardTypeShuffle:
 		targets := g.validShuffleTargets(p)
 		if len(targets) == 0 {
-			g.logEvent("%s dealt Swap — no valid swap target, discarded", p.Name)
-			g.Message = fmt.Sprintf("%s was dealt Swap — no valid swap target, discarded.", p.Name)
+			g.msg("%s was dealt Swap — no valid swap target, discarded.", p.Name)
 			g.emit(GameEvent{Type: "swap_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 		} else {
-			g.logEvent("%s dealt Swap — choosing target", p.Name)
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.indexOfPlayer(p)}
-			g.Message = fmt.Sprintf("%s was dealt Swap — choose a player to swap with!", p.Name)
+			g.msg("%s was dealt Swap — choose a player to swap with!", p.Name)
 		}
 	}
 }
@@ -936,7 +935,7 @@ func (g *Game) refillDeck() {
 func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 	if len(g.Deck) == 0 && len(g.UsedCards) == 0 {
 		p.Status = StatusStopped
-		g.Message = fmt.Sprintf("All cards drawn — %s is forced to stop.", p.Name)
+		g.msg("All cards drawn — %s is forced to stop.", p.Name)
 		g.emit(GameEvent{Type: "stop_forced", PlayerID: p.ID})
 		g.advanceTurn()
 		return nil
@@ -949,22 +948,19 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("%s survived bust with 2nd Chance (drew %d)", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Turn ends.", p.Name, card.Value)
+				g.msg("%s drew %d — Second Chance saved the bust! Turn ends.", p.Name, card.Value)
 				g.emit(GameEvent{Type: "second_chance", PlayerID: p.ID, CardValue: card.Value})
 				g.advanceTurn()
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
-				g.logEvent("%s BUSTED — duplicate %d", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d — BUSTED! All round points lost.", p.Name, card.Value)
+				g.msg("%s drew %d — BUSTED!", p.Name, card.Value)
 				g.emit(GameEvent{Type: "bust", PlayerID: p.ID, CardValue: card.Value})
 				g.advanceTurn()
 			}
 		} else {
 			p.Cards = append(p.Cards, card)
-			g.logEvent("%s drew %d", p.Name, card.Value)
-			g.Message = fmt.Sprintf("%s drew %d.", p.Name, card.Value)
+			g.msg("%s drew %d.", p.Name, card.Value)
 			if p.UniqueNumberCount() == 7 {
 				g.triggerFlip7(p)
 			} else {
@@ -974,8 +970,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 
 	case CardTypeModifierAdd, CardTypeModifierMul, CardTypeModifierSub, CardTypeModifierDiv:
 		p.Cards = append(p.Cards, card)
-		g.logEvent("%s drew %s", p.Name, card.Name)
-		g.Message = fmt.Sprintf("%s drew %s.", p.Name, card.Name)
+		g.msg("%s drew %s.", p.Name, card.Name)
 		g.advanceTurn() // one card per turn — pass to next player
 
 	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance:
@@ -987,15 +982,14 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		switch len(targets) {
 		case 0:
 			// No valid target (e.g. all active players already hold Second Chance).
-			g.logEvent("%s drew %s — no valid target, discarded", p.Name, card.Name)
-			g.Message = fmt.Sprintf("%s drew %s — no valid target, discarded.", p.Name, card.Name)
+			g.msg("%s drew %s — no valid target, discarded.", p.Name, card.Name)
 			g.advanceTurn()
 		case 1:
 			// Only one possible target: auto-resolve immediately.
 			g.resolveActionWithTarget(p, card, g.playerByID(targets[0]))
 		default:
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
-			g.Message = fmt.Sprintf("%s drew %s — choose a target!", p.Name, card.Name)
+			g.msg("%s drew %s — choose a target!", p.Name, card.Name)
 		}
 
 	case CardTypeThief:
@@ -1004,15 +998,14 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		}
 		targets := g.validThiefTargets(p)
 		if len(targets) == 0 {
-			g.logEvent("%s drew Thief — no valid target, discarded", p.Name)
-			g.Message = fmt.Sprintf("%s drew Thief — no card to steal, discarded.", p.Name)
+			g.msg("%s drew Thief — no valid target, discarded.", p.Name)
 			g.emit(GameEvent{Type: "thief_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 			g.advanceTurn()
 		} else {
 			// Always pending: two-stage choice (player, then card).
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
-			g.Message = fmt.Sprintf("%s drew Thief — choose a player to steal from!", p.Name)
+			g.msg("%s drew Thief — choose a player to steal from!", p.Name)
 		}
 
 	case CardTypeShuffle:
@@ -1021,15 +1014,14 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		}
 		targets := g.validShuffleTargets(p)
 		if len(targets) == 0 {
-			g.logEvent("%s drew Swap — no valid swap target, discarded", p.Name)
-			g.Message = fmt.Sprintf("%s drew Swap — no valid swap target, discarded.", p.Name)
+			g.msg("%s drew Swap — no valid swap target, discarded.", p.Name)
 			g.emit(GameEvent{Type: "swap_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 			g.advanceTurn()
 		} else {
 			// Always pending: two-stage choice (partner, then card pair).
 			g.pending = &pendingAction{Card: card, DrawerIdx: g.CurrentIndex}
-			g.Message = fmt.Sprintf("%s drew Swap — choose a player to swap with!", p.Name)
+			g.msg("%s drew Swap — choose a player to swap with!", p.Name)
 		}
 	}
 
@@ -1044,11 +1036,9 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		target.Cards = append(target.Cards, card)
 		target.Status = StatusFrozen
 		if target == drawer {
-			g.logEvent("%s froze themselves — %d pts banked", drawer.Name, drawer.RoundScore())
-			g.Message = fmt.Sprintf("%s froze themselves — banks %d pts!", drawer.Name, drawer.RoundScore())
+			g.msg("%s froze themselves — banks %d pts!", drawer.Name, drawer.RoundScore())
 		} else {
-			g.logEvent("%s froze %s — %s banks %d pts", drawer.Name, target.Name, target.Name, target.RoundScore())
-			g.Message = fmt.Sprintf("%s used Freeze on %s — %s banks %d pts and exits!",
+			g.msg("%s used Freeze on %s — %s banks %d pts and exits!",
 				drawer.Name, target.Name, target.Name, target.RoundScore())
 		}
 		g.emit(GameEvent{Type: "freeze", PlayerID: target.ID})
@@ -1059,11 +1049,9 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 	case CardTypeFlip3:
 		target.Cards = append(target.Cards, card)
 		if target == drawer {
-			g.logEvent("%s Flip 3 — drawing 3 cards", drawer.Name)
-			g.Message = fmt.Sprintf("%s drew Flip 3 — drawing 3 cards!", drawer.Name)
+			g.msg("%s drew Flip 3 — drawing 3 cards!", drawer.Name)
 		} else {
-			g.logEvent("%s → Flip 3 → %s draws 3 cards", drawer.Name, target.Name)
-			g.Message = fmt.Sprintf("%s used Flip 3 on %s — %s draws 3 cards!", drawer.Name, target.Name, target.Name)
+			g.msg("%s used Flip 3 on %s — %s draws 3 cards!", drawer.Name, target.Name, target.Name)
 		}
 		g.emit(GameEvent{Type: "flip3", PlayerID: target.ID})
 		if g.inDealing {
@@ -1100,11 +1088,9 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 		target.Cards = append(target.Cards, card)
 		target.HasSecondChance = true
 		if target == drawer {
-			g.logEvent("%s drew 2nd Chance", drawer.Name)
-			g.Message = fmt.Sprintf("%s drew Second Chance — one bust blocked!", drawer.Name)
+			g.msg("%s drew Second Chance — one bust blocked!", drawer.Name)
 		} else {
-			g.logEvent("%s gave 2nd Chance to %s", drawer.Name, target.Name)
-			g.Message = fmt.Sprintf("%s gave Second Chance to %s!", drawer.Name, target.Name)
+			g.msg("%s gave Second Chance to %s!", drawer.Name, target.Name)
 		}
 		if !g.inDealing && !g.inDeferred {
 			g.advanceTurn()
@@ -1118,8 +1104,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.applyThiefSteal(drawer, target, stealable[0], card)
 		} else {
 			g.UsedCards = append(g.UsedCards, card)
-			g.logEvent("%s Thief on %s — nothing to steal, discarded", drawer.Name, target.Name)
-			g.Message = fmt.Sprintf("%s used Thief on %s — nothing to steal, discarded.", drawer.Name, target.Name)
+			g.msg("%s used Thief on %s — nothing to steal, discarded.", drawer.Name, target.Name)
 			g.emit(GameEvent{Type: "thief_discarded", PlayerID: drawer.ID})
 		}
 		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
@@ -1134,8 +1119,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.applyShuffleSwap(drawer, target, drawerNums[0], targetNums[0], card)
 		} else {
 			g.UsedCards = append(g.UsedCards, card)
-			g.logEvent("%s Swap with %s — no cards to swap, discarded", drawer.Name, target.Name)
-			g.Message = fmt.Sprintf("%s used Swap with %s — no cards to swap, discarded.", drawer.Name, target.Name)
+			g.msg("%s used Swap with %s — no cards to swap, discarded.", drawer.Name, target.Name)
 			g.emit(GameEvent{Type: "swap_discarded", PlayerID: drawer.ID})
 		}
 		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
@@ -1163,21 +1147,18 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 		if p.HasNumber(card.Value) {
 			if p.HasSecondChance {
 				g.consumeSecondChance(p)
-				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d)", p.Name, card.Value)
-				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draws continue.", p.Name, card.Value)
+				g.msg("%s drew %d during Flip 3 — Second Chance saved the bust! Draws continue.", p.Name, card.Value)
 				g.emit(GameEvent{Type: "second_chance", PlayerID: p.ID, CardValue: card.Value})
 				return nil, false // SC saves the bust; remaining Flip 3 draws continue
 			}
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted
-			g.logEvent("  %s BUSTED in Flip 3 — duplicate %d", p.Name, card.Value)
-			g.Message = fmt.Sprintf("%s drew %d during Flip 3 — BUSTED!", p.Name, card.Value)
+			g.msg("%s drew %d during Flip 3 — BUSTED!", p.Name, card.Value)
 			g.emit(GameEvent{Type: "bust", PlayerID: p.ID, CardValue: card.Value})
 			return nil, true // bust stops the Flip 3 sequence
 		}
 		p.Cards = append(p.Cards, card)
-		g.logEvent("  %s drew %d (Flip 3)", p.Name, card.Value)
-		g.Message = fmt.Sprintf("%s drew %d (Flip 3).", p.Name, card.Value)
+		g.msg("%s drew %d (Flip 3).", p.Name, card.Value)
 		if p.UniqueNumberCount() == 7 {
 			g.triggerFlip7(p)
 			return nil, true
@@ -1185,8 +1166,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 
 	case CardTypeModifierAdd, CardTypeModifierMul, CardTypeModifierSub, CardTypeModifierDiv:
 		p.Cards = append(p.Cards, card)
-		g.logEvent("  %s drew %s (Flip 3)", p.Name, card.Name)
-		g.Message = fmt.Sprintf("%s drew %s (Flip 3).", p.Name, card.Name)
+		g.msg("%s drew %s (Flip 3).", p.Name, card.Name)
 
 	case CardTypeFreeze, CardTypeFlip3, CardTypeSecondChance, CardTypeThief, CardTypeShuffle:
 		return []Card{card}, false // defer; resolve after all 3 cards drawn
@@ -1211,19 +1191,17 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		if g.Players[nextIdx].Status == StatusActive {
 			g.Players[nextIdx].Cards = append(g.Players[nextIdx].Cards, card)
 			g.Players[nextIdx].Status = StatusFrozen
-			g.logEvent("  Freeze (auto) → %s banks %d pts", g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
-			g.Message = fmt.Sprintf("Freeze (deferred) — %s banks %d pts and exits!",
+			g.msg("Freeze (deferred) — %s banks %d pts and exits!",
 				g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
 			g.emit(GameEvent{Type: "freeze", PlayerID: g.Players[nextIdx].ID})
 		} else {
 			target.Cards = append(target.Cards, card)
-			g.Message = "Freeze (deferred) — no active player to freeze."
+			g.msg("Freeze (deferred) — no active player to freeze.")
 		}
 
 	case CardTypeFlip3:
 		target.Cards = append(target.Cards, card)
-		g.logEvent("  Flip 3 (auto) → %s draws 3 more cards", target.Name)
-		g.Message = fmt.Sprintf("Flip 3 (deferred) — %s draws 3 more cards!", target.Name)
+		g.msg("Flip 3 (deferred) — %s draws 3 more cards!", target.Name)
 		g.emit(GameEvent{Type: "flip3", PlayerID: target.ID})
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
@@ -1246,9 +1224,9 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		if !target.HasSecondChance {
 			target.Cards = append(target.Cards, card)
 			target.HasSecondChance = true
-			g.Message = fmt.Sprintf("%s gets Second Chance (deferred from Flip 3)!", target.Name)
+			g.msg("%s gets Second Chance (deferred from Flip 3)!", target.Name)
 		} else {
-			g.Message = fmt.Sprintf("Second Chance (deferred) discarded — %s already holds one.", target.Name)
+			g.msg("Second Chance (deferred) discarded — %s already holds one.", target.Name)
 		}
 
 	case CardTypeThief:
@@ -1264,8 +1242,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 			}
 		}
 		g.UsedCards = append(g.UsedCards, card)
-		g.logEvent("  Thief (auto) — no stealable target, discarded")
-		g.Message = "Thief (deferred) — no valid target to steal from, discarded."
+		g.msg("Thief (deferred) — no valid target to steal from, discarded.")
 		g.emit(GameEvent{Type: "thief_discarded", PlayerID: target.ID})
 
 	case CardTypeShuffle:
@@ -1282,8 +1259,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 			}
 		}
 		g.UsedCards = append(g.UsedCards, card)
-		g.logEvent("  Swap (auto) — no valid swap target, discarded")
-		g.Message = "Swap (deferred) — no valid swap target, discarded."
+		g.msg("Swap (deferred) — no valid swap target, discarded.")
 		g.emit(GameEvent{Type: "swap_discarded", PlayerID: target.ID})
 	}
 }
@@ -1325,8 +1301,7 @@ func (g *Game) applyThiefSteal(thief, victim *Player, stolenCard, thiefCard Card
 	}
 	thief.Cards = append(thief.Cards, stolenCard)
 	thief.Cards = append(thief.Cards, thiefCard)
-	g.logEvent("%s stole %s from %s", thief.Name, stolenCard.Name, victim.Name)
-	g.Message = fmt.Sprintf("%s used Thief — stole %s from %s!", thief.Name, stolenCard.Name, victim.Name)
+	g.msg("%s used Thief — stole %s from %s!", thief.Name, stolenCard.Name, victim.Name)
 	g.emit(GameEvent{Type: "thief_steal", PlayerID: thief.ID, PlayerID2: victim.ID, CardName: stolenCard.Name})
 	if thief.UniqueNumberCount() == 7 {
 		g.triggerFlip7(thief)
@@ -1361,7 +1336,7 @@ func (g *Game) consumeSecondChance(p *Player) {
 
 // triggerFlip7 ends the round when p collects 7 unique number cards.
 func (g *Game) triggerFlip7(p *Player) {
-	g.logEvent("★ %s — FLIP 7! (+15 bonus)", p.Name)
+	g.msg("★ %s — FLIP 7! (+15 bonus)", p.Name)
 	g.emit(GameEvent{Type: "flip7", PlayerID: p.ID})
 	for _, other := range g.Players {
 		if other != p && other.Status == StatusActive {
@@ -1430,7 +1405,7 @@ func (g *Game) endRound(flip7Winner *Player) {
 		// One player is clearly ahead at 200+ — they win.
 		g.Phase = PhaseGameOver
 		g.Winners = leaders
-		g.Message = fmt.Sprintf("GAME OVER — %s wins with %d pts! (%s)",
+		g.msg("GAME OVER — %s wins with %d pts! (%s)",
 			leaders[0].Name, leaders[0].TotalScore, strings.Join(parts, ", "))
 
 	case len(leaders) > 1:
@@ -1442,20 +1417,20 @@ func (g *Game) endRound(flip7Winner *Player) {
 		tieMsg := fmt.Sprintf("%s are tied at %d pts — playing on to break the tie!",
 			strings.Join(names, " & "), topScore)
 		if flip7Winner != nil {
-			g.Message = fmt.Sprintf("FLIP 7 by %s (+15 bonus)! %s  %s — next round soon.",
+			g.msg("FLIP 7 by %s (+15 bonus)! %s  %s — next round soon.",
 				flip7Winner.Name, strings.Join(parts, ", "), tieMsg)
 		} else {
-			g.Message = fmt.Sprintf("Round %d: %s  %s — next round soon.",
+			g.msg("Round %d: %s  %s — next round soon.",
 				g.RoundNumber, strings.Join(parts, ", "), tieMsg)
 		}
 
 	default:
 		// Nobody at 200+ yet — normal round end.
 		if flip7Winner != nil {
-			g.Message = fmt.Sprintf("FLIP 7 by %s (+15 bonus)! %s — next round soon.",
+			g.msg("FLIP 7 by %s (+15 bonus)! %s — next round soon.",
 				flip7Winner.Name, strings.Join(parts, ", "))
 		} else {
-			g.Message = fmt.Sprintf("Round %d over: %s — next round starting soon.",
+			g.msg("Round %d over: %s — next round starting soon.",
 				g.RoundNumber, strings.Join(parts, ", "))
 		}
 	}
@@ -1581,8 +1556,7 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 	// Shuffle card stays in drawer's hand as a visible marker.
 	drawer.Cards = append(drawer.Cards, shuffleCard)
 
-	g.logEvent("%s used Swap — swapped %s with %s's %s", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
-	g.Message = fmt.Sprintf("%s used Swap — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
+	g.msg("%s used Swap — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
 	g.emit(GameEvent{Type: "swap_success", PlayerID: drawer.ID, PlayerID2: partner.ID, CardName: drawerCard.Name, CardName2: partnerCard.Name})
 
 	// Check Flip 7 for drawer first (they initiated the action), then partner.
