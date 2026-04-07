@@ -8,7 +8,7 @@ let playerID    = '';
 let isHost      = false;
 let gameState        = null;
 let prevPlayers      = [];   // previous player states for animation diffs
-let prevMessage      = '';   // previous gameState.message for change detection
+let prevEventSeq     = -1;   // last handled lastEvent.seq
 let ws               = null;
 let reconnectDelay   = 1000;
 let reconnectTimer   = null; // handle for the scheduled reconnect setTimeout
@@ -169,119 +169,114 @@ function spawnGhostCard(playerId, cssClass, label, title, delayMs = 0) {
   }, delayMs);
 }
 
-// Parse the server message and fire the appropriate banner + sound.
-// Single source of truth for all game-event notifications — called once
-// per message change so every event is handled exactly the same way.
-function handleGameEvent(msg) {
-  // Bust
-  if (msg.includes('BUSTED')) {
-    const m = msg.match(/^(.+?) (?:drew|was dealt) (\d+)/);
-    showActionBanner(
-      m ? `💥 ${m[1]} BUSTED — duplicate ${m[2]}!` : '💥 BUSTED!',
-      BANNER.bust
-    );
-    sndBust();
-    return;
-  }
+// Handle a structured game event emitted by the server.
+// Single source of truth for all banners + sounds — no string parsing.
+function handleGameEvent(evt) {
+  const byID = id => gameState.players.find(p => p.id === id);
 
-  // Second Chance saved a bust
-  if (msg.includes('Second Chance used')) {
-    const m = msg.match(/^(.+?) (?:drew|was dealt) (\d+)/);
-    if (!m) return;
-    const [, name, val] = m;
-    const player = gameState.players.find(p => p.name === name);
-    showActionBanner(`🛡️ ${name} — 2nd Chance saved from ${val}!`, BANNER.sc);
-    sndSecondChance();
-    if (player) {
+  switch (evt.type) {
+
+    case 'bust': {
+      const p = byID(evt.playerID);
+      showActionBanner(
+        p ? `💥 ${p.name} BUSTED — duplicate ${evt.cardValue}!` : '💥 BUSTED!',
+        BANNER.bust
+      );
+      sndBust();
+      break;
+    }
+
+    case 'second_chance': {
+      const p = byID(evt.playerID);
+      if (!p) break;
+      showActionBanner(`🛡️ ${p.name} — 2nd Chance saved from ${evt.cardValue}!`, BANNER.sc);
+      sndSecondChance();
       setTimeout(() => {
-        const panel = document.querySelector(`[data-player-id="${player.id}"]`);
+        const panel = document.querySelector(`[data-player-id="${p.id}"]`);
         if (panel) {
           panel.classList.add('just-second-chance');
           panel.addEventListener('animationend', () => panel.classList.remove('just-second-chance'), { once: true });
         }
       }, 80);
-      spawnGhostCard(player.id, 'ghost-bust-card', val,   `Would-be duplicate ${val}`, 80);
-      spawnGhostCard(player.id, 'ghost-sc-card',   '🛡️', '2nd Chance used',           80);
+      spawnGhostCard(p.id, 'ghost-bust-card', evt.cardValue, `Would-be duplicate ${evt.cardValue}`, 80);
+      spawnGhostCard(p.id, 'ghost-sc-card', '🛡️', '2nd Chance used', 80);
+      break;
     }
-    return;
-  }
 
-  // Freeze applied (direct or deferred)
-  if ((msg.includes('froze') || msg.includes('Freeze')) && msg.includes('banks')) {
-    const m = msg.match(/Freeze on (.+?) —/) ||
-              msg.match(/^(.+?) froze themselves/) ||
-              msg.match(/Freeze \(deferred\) — (.+?) banks/);
-    if (m) { showActionBanner(`❄️ ${m[1]} was frozen!`, BANNER.freeze); sndFreeze(); }
-    return;
-  }
-
-  // Flip 3 started (direct or deferred)
-  if (msg.includes('Flip 3') && (msg.includes('draws 3') || msg.includes('drawing 3'))) {
-    const m = msg.match(/Flip 3 on (.+?) —/) ||
-              msg.match(/^(.+?) drew Flip 3/) ||
-              msg.match(/Flip 3 \(deferred\) — (.+?) draws/);
-    if (m) { showActionBanner(`🎲 Flip 3 on ${m[1]}!`, BANNER.flip3); sndFlip3(); }
-    return;
-  }
-
-  // Thief steal succeeded
-  if (msg.includes('used Thief — stole')) {
-    const m = msg.match(/^(.+?) used Thief — stole (.+?) from/);
-    if (m) { showActionBanner(`🃏 ${m[1]} stole ${m[2]}!`, BANNER.thief); sndThief(); }
-    return;
-  }
-
-  // Thief discarded — all forms (normal draw, nothing to steal, deferred auto-discard)
-  if (msg.includes('Thief') && msg.includes('discarded')) {
-    const m  = msg.match(/^(.+?) (?:drew|dealt|used) Thief/);
-    const tp = m
-      ? gameState.players.find(p => p.name === m[1])
-      : gameState.players.find(p => p.cards.some(c => c.type === 'flip3')); // deferred
-    if (tp) {
-      showActionBanner(`🃏 ${tp.name} — Thief discarded (nothing to steal)`, BANNER.thief);
-      spawnGhostCard(tp.id, 'ghost-thief-card', '🃏', 'Thief — nothing to steal, discarded', 80);
+    case 'freeze': {
+      const p = byID(evt.playerID);
+      if (p) { showActionBanner(`❄️ ${p.name} was frozen!`, BANNER.freeze); sndFreeze(); }
+      break;
     }
-    return;
-  }
 
-  // Swap card succeeded
-  if (msg.includes('used Swap — swapped')) {
-    const m = msg.match(/^(.+?) used Swap — swapped (.+?) with (.+?)'s (.+?)!/);
-    if (m) {
-      showActionBanner(`🔀 ${m[1]} swapped ${m[2]} ↔ ${m[3]}'s ${m[4]}!`, BANNER.swap);
-      sndSwap();
-      // Briefly highlight both players' panels.
-      const p1 = gameState.players.find(p => p.name === m[1]);
-      const p2 = gameState.players.find(p => p.name === m[3]);
-      [p1, p2].forEach(p => {
-        if (!p) return;
-        const panel = document.querySelector(`[data-player-id="${p.id}"]`);
-        if (panel) {
-          panel.classList.add('just-swap');
-          panel.addEventListener('animationend', () => panel.classList.remove('just-swap'), { once: true });
-        }
-      });
+    case 'flip3': {
+      const p = byID(evt.playerID);
+      if (p) { showActionBanner(`🎲 Flip 3 on ${p.name}!`, BANNER.flip3); sndFlip3(); }
+      break;
     }
-    return;
-  }
 
-  // Swap discarded — no valid swap target
-  if (msg.includes('Swap') && msg.includes('discarded')) {
-    const m  = msg.match(/^(.+?) (?:drew|dealt|used) Swap/);
-    const tp = m ? gameState.players.find(p => p.name === m[1]) : null;
-    if (tp) {
-      showActionBanner(`🔀 ${tp.name} — Swap discarded (no valid target)`, BANNER.swap);
-      spawnGhostCard(tp.id, 'ghost-swap-card', '🔀', 'Swap — discarded', 80);
+    case 'thief_steal': {
+      const p = byID(evt.playerID);
+      if (p) { showActionBanner(`🃏 ${p.name} stole ${evt.cardName}!`, BANNER.thief); sndThief(); }
+      break;
     }
-    return;
-  }
 
-  // Player stopped (voluntary or forced)
-  if (msg.includes('stopped with') || msg.includes('is forced to stop')) {
-    const m1 = msg.match(/^(.+?) stopped with (\d+)/);
-    const m2 = msg.match(/All cards drawn — (.+?) is forced to stop/);
-    if (m1) { showActionBanner(`🏦 ${m1[1]} stopped — ${m1[2]} pts`, BANNER.stop); sndStop(); }
-    else if (m2) { showActionBanner(`🏦 ${m2[1]} stopped`, BANNER.stop); sndStop(); }
+    case 'thief_discarded': {
+      const p = byID(evt.playerID);
+      if (p) {
+        showActionBanner(`🃏 ${p.name} — Thief discarded (nothing to steal)`, BANNER.thief);
+        spawnGhostCard(p.id, 'ghost-thief-card', '🃏', 'Thief — nothing to steal, discarded', 80);
+      }
+      break;
+    }
+
+    case 'swap_success': {
+      const p1 = byID(evt.playerID);
+      const p2 = byID(evt.playerID2);
+      if (p1) {
+        showActionBanner(
+          `🔀 ${p1.name} swapped ${evt.cardName} ↔ ${p2 ? p2.name : '?'}'s ${evt.cardName2}!`,
+          BANNER.swap
+        );
+        sndSwap();
+        [p1, p2].forEach(p => {
+          if (!p) return;
+          const panel = document.querySelector(`[data-player-id="${p.id}"]`);
+          if (panel) {
+            panel.classList.add('just-swap');
+            panel.addEventListener('animationend', () => panel.classList.remove('just-swap'), { once: true });
+          }
+        });
+      }
+      break;
+    }
+
+    case 'swap_discarded': {
+      const p = byID(evt.playerID);
+      if (p) {
+        showActionBanner(`🔀 ${p.name} — Swap discarded (no valid target)`, BANNER.swap);
+        spawnGhostCard(p.id, 'ghost-swap-card', '🔀', 'Swap — discarded', 80);
+      }
+      break;
+    }
+
+    case 'stop': {
+      const p = byID(evt.playerID);
+      if (p) { showActionBanner(`🏦 ${p.name} stopped — ${evt.score} pts`, BANNER.stop); sndStop(); }
+      break;
+    }
+
+    case 'stop_forced': {
+      const p = byID(evt.playerID);
+      if (p) { showActionBanner(`🏦 ${p.name} stopped (no cards left)`, BANNER.stop); sndStop(); }
+      break;
+    }
+
+    case 'flip7': {
+      const p = byID(evt.playerID);
+      if (p) { showActionBanner(`🎉 ${p.name} — FLIP 7! +15 bonus!`, BANNER.flip7); sndFlip7(); }
+      break;
+    }
   }
 }
 
@@ -289,7 +284,6 @@ function render() {
   if (!gameState) return;
 
   const prevSnapshot = prevPlayers.slice();
-  const curMsg       = gameState.message || '';
 
   // Detect round transition — prevPlayers still holds the previous round's card
   // counts; on a new round treat every player's prevCount as 0.
@@ -297,10 +291,12 @@ function render() {
     prevSnapshot[0].roundNumber !== undefined &&
     prevSnapshot[0].roundNumber !== gameState.roundNumber;
 
-  // ── 1. Message-driven banners + sounds ─────────────────────────────────────
-  // Single code path for all game events — no duplicated banner logic.
-  if (curMsg !== prevMessage) {
-    handleGameEvent(curMsg);
+  // ── 1. Structured-event banners + sounds ──────────────────────────────────
+  // Single code path for all game events — no string parsing.
+  const evt = gameState.lastEvent;
+  if (evt && evt.seq !== prevEventSeq) {
+    prevEventSeq = evt.seq;
+    handleGameEvent(evt);
   }
 
   // ── 2. Card-arrival animations ─────────────────────────────────────────────
@@ -319,14 +315,7 @@ function render() {
     const prev     = prevSnapshot.find(pp => pp.id === p.id);
     const prevStat = isNewRound ? null : (prev ? prev.status : null);
 
-    // Flip 7 bonus — triggerFlip7 ends the round immediately with no playing-phase
-    // message; detect via roundBonus appearing in the round_end state.
-    if (prev && p.roundBonus > 0 && !prev.roundBonus) {
-      showActionBanner(`🎉 ${p.name} — FLIP 7! +${p.roundBonus} bonus!`, BANNER.flip7);
-      sndFlip7();
-    }
-
-    // Status visual effects — DOM classes only; banner + sound come from handleGameEvent.
+    // Status visual effects — CSS classes and ghost cards; banners + sounds come from handleGameEvent.
     if (prevStat && prevStat !== p.status) {
       const pid = p.id;
       if (p.status === 'frozen') {
@@ -349,11 +338,6 @@ function render() {
           const bustCard = p.cards[p.cards.length - 1];
           if (bustCard && bustCard.type === 'number') {
             spawnGhostCard(pid, 'ghost-bust-card', bustCard.value, `Duplicate ${bustCard.value} — BUSTED`);
-          }
-          // Fallback banner for the rare dealing-phase bust that has no BUSTED message
-          if (!curMsg.includes('BUSTED')) {
-            showActionBanner(`💥 ${p.name} BUSTED!`, BANNER.bust);
-            sndBust();
           }
         }, 80);
       }
@@ -379,7 +363,6 @@ function render() {
   });
 
   // ── 5. Snapshot + static UI ────────────────────────────────────────────────
-  prevMessage = curMsg;
   prevPlayers = gameState.players.map(p => ({
     id: p.id, cards: [...p.cards], status: p.status,
     hasSecondChance: p.hasSecondChance, roundBonus: p.roundBonus || 0,

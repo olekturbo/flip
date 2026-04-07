@@ -48,6 +48,21 @@ type PendingActionState struct {
 	ShufflePartnerCards []Card `json:"shufflePartnerCards,omitempty"`
 }
 
+// GameEvent is a structured notification emitted for each significant game action.
+// Clients drive animations and sounds from this rather than parsing Message strings.
+// Seq is a monotonic counter; clients detect a new event when seq differs from the
+// last value they processed.
+type GameEvent struct {
+	Seq       int    `json:"seq"`
+	Type      string `json:"type"`
+	PlayerID  string `json:"playerID,omitempty"`
+	PlayerID2 string `json:"playerID2,omitempty"` // swap partner / thief victim
+	CardName  string `json:"cardName,omitempty"`  // stolen card / swap drawer's card
+	CardName2 string `json:"cardName2,omitempty"` // swap partner's card
+	CardValue int    `json:"cardValue,omitempty"` // bust / SC saved card value
+	Score     int    `json:"score,omitempty"`     // score at voluntary stop
+}
+
 // GameState is the JSON-serialisable snapshot broadcast to clients.
 type GameState struct {
 	Phase              Phase               `json:"phase"`
@@ -60,6 +75,7 @@ type GameState struct {
 	WinnerIDs          []string            `json:"winnerIDs,omitempty"` // one or more in case of a tie
 	NextRoundIn        int                 `json:"nextRoundIn,omitempty"`
 	Events             []string            `json:"events"`
+	LastEvent          *GameEvent          `json:"lastEvent,omitempty"`
 }
 
 // PlayerView is the serialisable projection of a Player.
@@ -100,6 +116,15 @@ type Game struct {
 	deferredAdvance bool   // call advanceTurn once all deferred cards are resolved
 	inDeferred     bool    // true while processDeferredCards is running (suppresses advanceTurn)
 	events         []string
+	lastEvent      *GameEvent
+	eventSeq       int
+}
+
+// emit sets the structured last-event broadcast to clients.
+func (g *Game) emit(e GameEvent) {
+	g.eventSeq++
+	e.Seq = g.eventSeq
+	g.lastEvent = &e
 }
 
 // logEvent appends a message to the event history (capped at 300 entries, oldest dropped first).
@@ -133,6 +158,7 @@ func (g *Game) processDeferredCards() {
 			if len(thiefTargets) == 0 {
 				g.logEvent("  Thief (deferred) — no valid target, discarded")
 				g.Message = "Thief (deferred from Flip 3) — no valid target to steal from, discarded."
+				g.emit(GameEvent{Type: "thief_discarded", PlayerID: p.ID})
 				g.UsedCards = append(g.UsedCards, dc)
 			} else {
 				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
@@ -148,6 +174,7 @@ func (g *Game) processDeferredCards() {
 			if len(targets) == 0 {
 				g.logEvent("  Swap (deferred) — no valid swap target, discarded")
 				g.Message = "Swap (deferred from Flip 3) — no valid swap target, discarded."
+				g.emit(GameEvent{Type: "swap_discarded", PlayerID: p.ID})
 				g.UsedCards = append(g.UsedCards, dc)
 			} else {
 				g.pending = &pendingAction{Card: dc, DrawerIdx: g.indexOfPlayer(p)}
@@ -412,6 +439,7 @@ func (g *Game) Stop(sessionID string) error {
 	cp.Status = StatusStopped
 	g.logEvent("%s stopped — %d pts", cp.Name, cp.RoundScore())
 	g.Message = fmt.Sprintf("%s stopped with %d round points.", cp.Name, cp.RoundScore())
+	g.emit(GameEvent{Type: "stop", PlayerID: cp.ID, Score: cp.RoundScore()})
 	g.advanceTurn()
 	return nil
 }
@@ -733,6 +761,7 @@ func (g *Game) State() GameState {
 		WinnerIDs:          winnerIDs,
 		NextRoundIn:        nextRoundIn,
 		Events:             events,
+		LastEvent:          g.lastEvent,
 	}
 }
 
@@ -827,10 +856,12 @@ func (g *Game) dealCardTo(p *Player) {
 				g.consumeSecondChance(p)
 				g.logEvent("%s survived dealing bust with 2nd Chance (dealt %d)", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s was dealt %d (duplicate!) — Second Chance used!", p.Name, card.Value)
+				g.emit(GameEvent{Type: "second_chance", PlayerID: p.ID, CardValue: card.Value})
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
 				g.logEvent("%s dealt %d — BUSTED (duplicate)", p.Name, card.Value)
+				g.emit(GameEvent{Type: "bust", PlayerID: p.ID, CardValue: card.Value})
 			}
 		} else {
 			p.Cards = append(p.Cards, card)
@@ -858,6 +889,7 @@ func (g *Game) dealCardTo(p *Player) {
 		if len(targets) == 0 {
 			g.logEvent("%s dealt Thief — no valid target, discarded", p.Name)
 			g.Message = fmt.Sprintf("%s was dealt Thief — no valid target, discarded.", p.Name)
+			g.emit(GameEvent{Type: "thief_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 		} else {
 			g.logEvent("%s dealt Thief — choosing target", p.Name)
@@ -870,6 +902,7 @@ func (g *Game) dealCardTo(p *Player) {
 		if len(targets) == 0 {
 			g.logEvent("%s dealt Swap — no valid swap target, discarded", p.Name)
 			g.Message = fmt.Sprintf("%s was dealt Swap — no valid swap target, discarded.", p.Name)
+			g.emit(GameEvent{Type: "swap_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 		} else {
 			g.logEvent("%s dealt Swap — choosing target", p.Name)
@@ -904,6 +937,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 	if len(g.Deck) == 0 && len(g.UsedCards) == 0 {
 		p.Status = StatusStopped
 		g.Message = fmt.Sprintf("All cards drawn — %s is forced to stop.", p.Name)
+		g.emit(GameEvent{Type: "stop_forced", PlayerID: p.ID})
 		g.advanceTurn()
 		return nil
 	}
@@ -917,12 +951,14 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 				g.consumeSecondChance(p)
 				g.logEvent("%s survived bust with 2nd Chance (drew %d)", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s drew %d (duplicate!) — Second Chance used! Turn ends.", p.Name, card.Value)
+				g.emit(GameEvent{Type: "second_chance", PlayerID: p.ID, CardValue: card.Value})
 				g.advanceTurn()
 			} else {
 				p.Cards = append(p.Cards, card)
 				p.Status = StatusBusted
 				g.logEvent("%s BUSTED — duplicate %d", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s drew %d — BUSTED! All round points lost.", p.Name, card.Value)
+				g.emit(GameEvent{Type: "bust", PlayerID: p.ID, CardValue: card.Value})
 				g.advanceTurn()
 			}
 		} else {
@@ -970,6 +1006,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		if len(targets) == 0 {
 			g.logEvent("%s drew Thief — no valid target, discarded", p.Name)
 			g.Message = fmt.Sprintf("%s drew Thief — no card to steal, discarded.", p.Name)
+			g.emit(GameEvent{Type: "thief_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 			g.advanceTurn()
 		} else {
@@ -986,6 +1023,7 @@ func (g *Game) drawOne(p *Player, inFlip3 bool) []Card {
 		if len(targets) == 0 {
 			g.logEvent("%s drew Swap — no valid swap target, discarded", p.Name)
 			g.Message = fmt.Sprintf("%s drew Swap — no valid swap target, discarded.", p.Name)
+			g.emit(GameEvent{Type: "swap_discarded", PlayerID: p.ID})
 			g.UsedCards = append(g.UsedCards, card)
 			g.advanceTurn()
 		} else {
@@ -1013,6 +1051,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.Message = fmt.Sprintf("%s used Freeze on %s — %s banks %d pts and exits!",
 				drawer.Name, target.Name, target.Name, target.RoundScore())
 		}
+		g.emit(GameEvent{Type: "freeze", PlayerID: target.ID})
 		if !g.inDealing && !g.inDeferred {
 			g.advanceTurn()
 		}
@@ -1026,6 +1065,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.logEvent("%s → Flip 3 → %s draws 3 cards", drawer.Name, target.Name)
 			g.Message = fmt.Sprintf("%s used Flip 3 on %s — %s draws 3 cards!", drawer.Name, target.Name, target.Name)
 		}
+		g.emit(GameEvent{Type: "flip3", PlayerID: target.ID})
 		if g.inDealing {
 			for i, qIdx := range g.dealingQueue {
 				if g.Players[qIdx] == target {
@@ -1080,6 +1120,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.UsedCards = append(g.UsedCards, card)
 			g.logEvent("%s Thief on %s — nothing to steal, discarded", drawer.Name, target.Name)
 			g.Message = fmt.Sprintf("%s used Thief on %s — nothing to steal, discarded.", drawer.Name, target.Name)
+			g.emit(GameEvent{Type: "thief_discarded", PlayerID: drawer.ID})
 		}
 		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
 			g.advanceTurn()
@@ -1095,6 +1136,7 @@ func (g *Game) resolveActionWithTarget(drawer *Player, card Card, target *Player
 			g.UsedCards = append(g.UsedCards, card)
 			g.logEvent("%s Swap with %s — no cards to swap, discarded", drawer.Name, target.Name)
 			g.Message = fmt.Sprintf("%s used Swap with %s — no cards to swap, discarded.", drawer.Name, target.Name)
+			g.emit(GameEvent{Type: "swap_discarded", PlayerID: drawer.ID})
 		}
 		if !g.inDealing && !g.inDeferred && g.Phase == PhasePlaying {
 			g.advanceTurn()
@@ -1110,6 +1152,7 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 	if len(g.Deck) == 0 && len(g.UsedCards) == 0 {
 		p.Status = StatusStopped
 		g.Message += fmt.Sprintf(" (no cards left — %s stops)", p.Name)
+		g.emit(GameEvent{Type: "stop_forced", PlayerID: p.ID})
 		return nil, true
 	}
 
@@ -1122,12 +1165,14 @@ func (g *Game) drawOneFlip3(p *Player) ([]Card, bool) {
 				g.consumeSecondChance(p)
 				g.logEvent("  %s survived Flip 3 bust with 2nd Chance (drew %d)", p.Name, card.Value)
 				g.Message = fmt.Sprintf("%s drew %d during Flip 3 (duplicate!) — Second Chance used! Draws continue.", p.Name, card.Value)
+				g.emit(GameEvent{Type: "second_chance", PlayerID: p.ID, CardValue: card.Value})
 				return nil, false // SC saves the bust; remaining Flip 3 draws continue
 			}
 			p.Cards = append(p.Cards, card)
 			p.Status = StatusBusted
 			g.logEvent("  %s BUSTED in Flip 3 — duplicate %d", p.Name, card.Value)
 			g.Message = fmt.Sprintf("%s drew %d during Flip 3 — BUSTED!", p.Name, card.Value)
+			g.emit(GameEvent{Type: "bust", PlayerID: p.ID, CardValue: card.Value})
 			return nil, true // bust stops the Flip 3 sequence
 		}
 		p.Cards = append(p.Cards, card)
@@ -1169,6 +1214,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 			g.logEvent("  Freeze (auto) → %s banks %d pts", g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
 			g.Message = fmt.Sprintf("Freeze (deferred) — %s banks %d pts and exits!",
 				g.Players[nextIdx].Name, g.Players[nextIdx].RoundScore())
+			g.emit(GameEvent{Type: "freeze", PlayerID: g.Players[nextIdx].ID})
 		} else {
 			target.Cards = append(target.Cards, card)
 			g.Message = "Freeze (deferred) — no active player to freeze."
@@ -1178,6 +1224,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		target.Cards = append(target.Cards, card)
 		g.logEvent("  Flip 3 (auto) → %s draws 3 more cards", target.Name)
 		g.Message = fmt.Sprintf("Flip 3 (deferred) — %s draws 3 more cards!", target.Name)
+		g.emit(GameEvent{Type: "flip3", PlayerID: target.ID})
 		deferred := []Card{}
 		for i := 0; i < 3; i++ {
 			if target.Status != StatusActive || g.Phase != PhasePlaying {
@@ -1219,6 +1266,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		g.UsedCards = append(g.UsedCards, card)
 		g.logEvent("  Thief (auto) — no stealable target, discarded")
 		g.Message = "Thief (deferred) — no valid target to steal from, discarded."
+		g.emit(GameEvent{Type: "thief_discarded", PlayerID: target.ID})
 
 	case CardTypeShuffle:
 		// Auto-swap: pick the first valid opponent and exchange first number cards.
@@ -1236,6 +1284,7 @@ func (g *Game) resolveActionAuto(target *Player, card Card) {
 		g.UsedCards = append(g.UsedCards, card)
 		g.logEvent("  Swap (auto) — no valid swap target, discarded")
 		g.Message = "Swap (deferred) — no valid swap target, discarded."
+		g.emit(GameEvent{Type: "swap_discarded", PlayerID: target.ID})
 	}
 }
 
@@ -1278,6 +1327,7 @@ func (g *Game) applyThiefSteal(thief, victim *Player, stolenCard, thiefCard Card
 	thief.Cards = append(thief.Cards, thiefCard)
 	g.logEvent("%s stole %s from %s", thief.Name, stolenCard.Name, victim.Name)
 	g.Message = fmt.Sprintf("%s used Thief — stole %s from %s!", thief.Name, stolenCard.Name, victim.Name)
+	g.emit(GameEvent{Type: "thief_steal", PlayerID: thief.ID, PlayerID2: victim.ID, CardName: stolenCard.Name})
 	if thief.UniqueNumberCount() == 7 {
 		g.triggerFlip7(thief)
 	}
@@ -1312,6 +1362,7 @@ func (g *Game) consumeSecondChance(p *Player) {
 // triggerFlip7 ends the round when p collects 7 unique number cards.
 func (g *Game) triggerFlip7(p *Player) {
 	g.logEvent("★ %s — FLIP 7! (+15 bonus)", p.Name)
+	g.emit(GameEvent{Type: "flip7", PlayerID: p.ID})
 	for _, other := range g.Players {
 		if other != p && other.Status == StatusActive {
 			other.Status = StatusStopped
@@ -1532,6 +1583,7 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 
 	g.logEvent("%s used Swap — swapped %s with %s's %s", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
 	g.Message = fmt.Sprintf("%s used Swap — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
+	g.emit(GameEvent{Type: "swap_success", PlayerID: drawer.ID, PlayerID2: partner.ID, CardName: drawerCard.Name, CardName2: partnerCard.Name})
 
 	// Check Flip 7 for drawer first (they initiated the action), then partner.
 	if drawer.UniqueNumberCount() == 7 {
