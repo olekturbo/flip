@@ -36,9 +36,16 @@ func main() {
 	// container down (it kills services after 15 min of no inbound HTTP traffic,
 	// even when WebSocket connections are active).
 	go func() {
-		url := "http://localhost" + *addr + "/healthz"
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("self-ping goroutine panic: %v", r)
+			}
+		}()
+		url := "http://127.0.0.1" + *addr + "/healthz"
 		client := &http.Client{Timeout: 5 * time.Second}
-		for range time.Tick(5 * time.Minute) {
+		log.Printf("self-ping goroutine started, url=%s", url)
+		time.Sleep(10 * time.Second) // wait for server to be ready
+		for {
 			resp, err := client.Get(url)
 			if err != nil {
 				log.Printf("self-ping failed: %v", err)
@@ -46,6 +53,7 @@ func main() {
 				resp.Body.Close()
 				log.Printf("self-ping ok")
 			}
+			time.Sleep(5 * time.Minute)
 		}
 	}()
 
