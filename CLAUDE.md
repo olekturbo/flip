@@ -61,7 +61,7 @@ The BDD feature files in `internal/game/features/` are **living documentation** 
 | `flip3.feature` | 3 forced draws, stops on bust or Flip 7 only, deferred action resolution |
 | `flip7.feature` | 7 unique numbers ends round, +15 bonus, active players bank |
 | `thief.feature` | Two-stage steal: choose player then card; discarded when nothing to steal; Flip 7 on stolen 7th |
-| `swap.feature` | Two-stage swap: choose partner then card pair; discarded when no valid swap target; Flip 7 on swapped 7th |
+| `swap.feature` | Two-stage swap: choose partner then card pair; discarded when no valid swap target; swapping for a duplicate busts the receiver |
 | `round_and_game.feature` | Score accumulation, win at 200+, tie continuation, bust at threshold |
 
 When adding a new mechanic, add a readable Gherkin scenario. When changing a mechanic, update the scenario to match.
@@ -105,7 +105,7 @@ Drawing a duplicate number = bust, score 0. Only number cards cause busts.
 - Two-stage interaction: first choose any active opponent who holds at least one number card (drawer must also hold at least one); then choose which of the drawer's number cards and which of the partner's number cards to swap.
 - The two chosen number cards trade hands.
 - If no valid partner exists, Swap is discarded with no effect.
-- Swapping the 7th unique number triggers Flip 7 immediately (drawer checked first).
+- Swapping for a card you (or the partner) already hold causes a bust for the recipient.
 
 ### Negative modifiers
 - **-2 / -4 / -6 / -8 / -10** — subtracted from the final round score.

@@ -36,7 +36,27 @@ Feature: Swap card
     Then no target choice is pending
     And it is Bob's turn
 
-  # Note: reaching Flip 7 via Swap would require a prior Swap to have created
-  # a duplicate in the drawer's hand (the only way to give away a card while keeping
-  # the unique count at 6, then gain a 7th unique). That multi-round edge case is
-  # covered by the triggerFlip7 call in applyShuffleSwap rather than a BDD scenario.
+  Scenario: Swapping for a card already held causes a bust
+    Given Alice has [3, 5]
+    And Bob has [5, 9]
+    And the deck is [Swap]
+    When Alice draws
+    Then a target choice is pending
+    When Alice targets Bob
+    Then a target choice is pending
+    When Alice shuffles 3 for 5
+    Then Alice is busted
+    And it is Bob's turn
+
+  Scenario: Swap that gives the partner a card they already hold busts the partner
+    Given Alice has [3, 7]
+    And Bob has [3, 9]
+    And the deck is [Swap]
+    When Alice draws
+    Then a target choice is pending
+    When Alice targets Bob
+    Then a target choice is pending
+    When Alice shuffles 3 for 9
+    Then Bob is busted
+    And it is Alice's turn
+

@@ -1550,6 +1550,10 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 			break
 		}
 	}
+	// Detect duplicate busts before giving the cards.
+	drawerBusts := drawer.HasNumber(partnerCard.Value)
+	partnerBusts := partner.HasNumber(drawerCard.Value)
+
 	// Cross-give the cards.
 	drawer.Cards = append(drawer.Cards, partnerCard)
 	partner.Cards = append(partner.Cards, drawerCard)
@@ -1559,10 +1563,17 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 	g.msg("%s used Swap — swapped %s with %s's %s!", drawer.Name, drawerCard.Name, partner.Name, partnerCard.Name)
 	g.emit(GameEvent{Type: "swap_success", PlayerID: drawer.ID, PlayerID2: partner.ID, CardName: drawerCard.Name, CardName2: partnerCard.Name})
 
-	// Check Flip 7 for drawer first (they initiated the action), then partner.
-	if drawer.UniqueNumberCount() == 7 {
-		g.triggerFlip7(drawer)
-	} else if partner.UniqueNumberCount() == 7 {
-		g.triggerFlip7(partner)
+	if drawerBusts {
+		drawer.Status = StatusBusted
+		g.msg("%s received a duplicate %s — BUSTED!", drawer.Name, partnerCard.Name)
+		g.emit(GameEvent{Type: "bust", PlayerID: drawer.ID, CardValue: partnerCard.Value})
+		return
 	}
+	if partnerBusts {
+		partner.Status = StatusBusted
+		g.msg("%s received a duplicate %s from the swap — BUSTED!", partner.Name, drawerCard.Name)
+		g.emit(GameEvent{Type: "bust", PlayerID: partner.ID, CardValue: drawerCard.Value})
+		return
+	}
+
 }
