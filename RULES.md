@@ -51,7 +51,7 @@ Target holds this card. If they would bust, discard both the duplicate and this 
 Two-stage interaction: first choose a target player, then choose which of their number cards to steal. The chosen card moves from the target's hand to yours. You can only target players who hold at least one number card you don't already hold. If no valid target exists, Thief is discarded with no effect. Stealing the 7th unique number triggers Flip 7 immediately.
 
 ### Swap
-Two-stage interaction: first choose any active opponent who holds at least one number card (you must also hold at least one). Then choose one of your number cards and one of theirs to swap — the two cards trade hands. If either player receives a card they already hold, that player busts. Discarded with no effect if no valid swap target exists.
+Two-stage interaction: first choose any active opponent who holds at least one number card (you must also hold at least one). Then choose one of your number cards and one of theirs to swap — the two cards trade hands. If either player receives a card they already hold, that player busts (unless they hold a Second Chance — the swap still commits but the duplicate is discarded instead). Discarded with no effect if no valid swap target exists.
 
 ---
 
