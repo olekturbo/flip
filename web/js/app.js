@@ -34,6 +34,10 @@ window.addEventListener('DOMContentLoaded', () => {
   el('share-url').value = window.location.href;
   initMuteButton();
 
+  // Restore auto-draw preference.
+  const cb = el('auto-draw-cb');
+  if (cb && localStorage.getItem('autoDraw') === '1') cb.checked = true;
+
   if (!playerName) {
     show('name-modal');
     el('name-input').focus();
@@ -127,6 +131,34 @@ document.addEventListener('keydown', (e) => {
 
 function togglePeek() {
   el('targeting-overlay')?.classList.toggle('peek');
+}
+
+// ── Auto-draw ──────────────────────────────────────────────────────────────────
+const AUTO_DRAW_DELAY = 2000; // ms — enough time to see the card and cancel
+let autoDrawTimer = null;
+
+function onAutoDrawChange() {
+  const cb = el('auto-draw-cb');
+  localStorage.setItem('autoDraw', cb.checked ? '1' : '0');
+  if (!cb.checked) cancelAutoDraw();
+}
+
+function cancelAutoDraw() {
+  if (autoDrawTimer) { clearTimeout(autoDrawTimer); autoDrawTimer = null; }
+}
+
+function scheduleAutoDraw() {
+  cancelAutoDraw();
+  const cb = el('auto-draw-cb');
+  if (!cb || !cb.checked) return;
+  const drawBtn = el('btn-draw');
+  if (!drawBtn || drawBtn.classList.contains('hidden')) return;
+  autoDrawTimer = setTimeout(() => {
+    autoDrawTimer = null;
+    // Re-check conditions — state may have changed during the delay.
+    const btn = el('btn-draw');
+    if (btn && !btn.classList.contains('hidden')) sendAction('draw');
+  }, AUTO_DRAW_DELAY);
 }
 
 function hidePeek() {
@@ -417,9 +449,10 @@ function render() {
 
   // Phase-specific UI
   hideAllOverlays();
-  hide('btn-draw'); hide('btn-stop');
+  hide('btn-draw'); hide('btn-stop'); hide('auto-draw-label');
   hide('your-turn-label'); hide('countdown');
   hide('targeting-overlay'); hide('targeting-waiting');
+  cancelAutoDraw();
 
   switch (gameState.phase) {
     case 'lobby':   renderLobby();   break;
@@ -623,6 +656,8 @@ function renderPlaying() {
     show('your-turn-label');
     show('btn-draw');
     show('btn-stop');
+    show('auto-draw-label');
+    scheduleAutoDraw();
   }
 }
 
@@ -743,6 +778,8 @@ function flushTurnControls() {
   show('your-turn-label');
   show('btn-draw');
   show('btn-stop');
+  show('auto-draw-label');
+  scheduleAutoDraw();
 }
 
 // ── Action banner ─────────────────────────────────────────────────────────────

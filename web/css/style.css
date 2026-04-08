@@ -669,6 +669,23 @@ input[type="text"]:focus { border-color: var(--gold); }
   flex-wrap: wrap;
 }
 
+.auto-draw-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.auto-draw-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
 #your-turn-label {
   font-size: 1rem;
   font-weight: 700;
