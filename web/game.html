@@ -94,13 +94,13 @@
   <!-- Target selection overlay — shown to the drawer of an action card -->
   <div id="targeting-overlay" class="targeting-overlay hidden">
     <div class="targeting-box">
-      <button class="targeting-peek-btn" id="btn-peek" onclick="togglePeek()" title="Peek at board (P)">
-        <span class="peek-icon-show">👁</span>
-        <span class="peek-icon-hide">✕</span>
-      </button>
       <p id="targeting-card-name" class="targeting-card-name"></p>
       <p id="targeting-prompt" class="targeting-prompt">Choose a target:</p>
       <div id="targeting-buttons" class="targeting-buttons"></div>
+      <button class="targeting-peek-btn" id="btn-peek" onclick="togglePeek()">
+        <span class="peek-icon-show">👁 Peek at board <kbd>P</kbd></span>
+        <span class="peek-icon-hide">↩ Back to targeting</span>
+      </button>
     </div>
   </div>
 
