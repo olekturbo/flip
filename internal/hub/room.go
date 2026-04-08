@@ -154,21 +154,26 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	// ── Step 5: broadcast current state to everyone ─────────────────────────
 	r.broadcastState()
 
-	// ── Step 6: heartbeat — ping every 15 s, close on failure ───────────────
-	// Browsers respond to WebSocket pings automatically with a pong frame;
-	// no JS-side handling is needed.  15 s is short enough to detect mobile
-	// connections killed by backgrounding within a reasonable time.
+	// ── Step 6: heartbeat — send a ping data frame every 20 s ───────────────
+	// We use an application-level {"type":"ping"} message instead of a
+	// protocol-level WebSocket ping because reverse proxies (e.g. Render.com)
+	// may not count protocol pings as traffic and will close "idle" connections
+	// after their own timeout (~55 s).  A data frame is always counted.
+	// The browser ignores unknown message types, so no JS change is needed.
 	go func() {
-		ticker := time.NewTicker(15 * time.Second)
+		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
+		pingMsg := []byte(`{"type":"ping"}`)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				pingCtx, pingCancel := context.WithTimeout(ctx, 5*time.Second)
-				err := conn.Ping(pingCtx)
-				pingCancel()
+				client.writeMu.Lock()
+				writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
+				err := conn.Write(writeCtx, websocket.MessageText, pingMsg)
+				writeCancel()
+				client.writeMu.Unlock()
 				if err != nil {
 					// Connection is dead; cancel the main context to unblock conn.Read.
 					cancel()
