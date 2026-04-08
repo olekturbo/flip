@@ -60,3 +60,29 @@ Feature: Swap card
     Then Bob is busted
     And it is Alice's turn
 
+  Scenario: Second Chance saves drawer when swap would give a duplicate
+    Given Alice has [3, 5] and a Second Chance
+    And Bob has [5, 9]
+    And the deck is [Swap]
+    When Alice draws
+    Then a target choice is pending
+    When Alice targets Bob
+    Then a target choice is pending
+    When Alice shuffles 3 for 5
+    Then Alice is not busted
+    And Alice no longer has Second Chance
+    And it is Bob's turn
+
+  Scenario: Second Chance saves partner when swap would give them a duplicate
+    Given Alice has [3, 7]
+    And Bob has [3, 9] and a Second Chance
+    And the deck is [Swap]
+    When Alice draws
+    Then a target choice is pending
+    When Alice targets Bob
+    Then a target choice is pending
+    When Alice shuffles 3 for 9
+    Then Bob is not busted
+    And Bob no longer has Second Chance
+    And it is Bob's turn
+

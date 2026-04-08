@@ -1565,15 +1565,12 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 
 	if drawerBusts {
 		if drawer.HasSecondChance {
-			// SC saves drawer: undo drawer's side of the swap.
-			// Remove the duplicate partnerCard that was just given to drawer.
+			// Swap committed: drawerCard stays with partner.
+			// SC discards the duplicate partnerCard instead of adding it to drawer's hand.
 			removeCard(&drawer.Cards, CardTypeNumber, partnerCard.Value)
-			// Remove drawerCard from partner and return it to drawer.
-			removeCard(&partner.Cards, CardTypeNumber, drawerCard.Value)
-			drawer.Cards = append(drawer.Cards, drawerCard)
 			g.UsedCards = append(g.UsedCards, partnerCard)
 			g.consumeSecondChance(drawer)
-			g.msg("%s — Second Chance saved from Swap bust! (%s returned)", drawer.Name, partnerCard.Name)
+			g.msg("%s — Second Chance saved from Swap bust! (%s discarded)", drawer.Name, partnerCard.Name)
 			g.emit(GameEvent{Type: "second_chance", PlayerID: drawer.ID, CardValue: partnerCard.Value})
 		} else {
 			drawer.Status = StatusBusted
@@ -1584,15 +1581,12 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 	}
 	if partnerBusts {
 		if partner.HasSecondChance {
-			// SC saves partner: undo partner's side of the swap.
-			// Remove the duplicate drawerCard that was just given to partner.
+			// Swap committed: partnerCard stays with drawer.
+			// SC discards the duplicate drawerCard instead of adding it to partner's hand.
 			removeCard(&partner.Cards, CardTypeNumber, drawerCard.Value)
-			// Remove partnerCard from drawer and return it to partner.
-			removeCard(&drawer.Cards, CardTypeNumber, partnerCard.Value)
-			partner.Cards = append(partner.Cards, partnerCard)
 			g.UsedCards = append(g.UsedCards, drawerCard)
 			g.consumeSecondChance(partner)
-			g.msg("%s — Second Chance saved from Swap bust! (%s returned)", partner.Name, drawerCard.Name)
+			g.msg("%s — Second Chance saved from Swap bust! (%s discarded)", partner.Name, drawerCard.Name)
 			g.emit(GameEvent{Type: "second_chance", PlayerID: partner.ID, CardValue: drawerCard.Value})
 		} else {
 			partner.Status = StatusBusted
