@@ -108,19 +108,30 @@ window.addEventListener('online', () => {
   connect();
 });
 
-// Keyboard shortcuts: (d) Draw, (s) Stop — active only when buttons are visible.
+// Keyboard shortcuts: (d) Draw, (s) Stop, (p) Peek board during targeting.
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
   const drawBtn = el('btn-draw');
   const stopBtn = el('btn-stop');
+  const overlay  = el('targeting-overlay');
   if (e.key === 'd' && drawBtn && !drawBtn.classList.contains('hidden')) {
     sendAction('draw');
   } else if (e.key === 's' && stopBtn && !stopBtn.classList.contains('hidden')) {
     sendAction('stop');
+  } else if (e.key === 'p' && overlay && !overlay.classList.contains('hidden')) {
+    togglePeek();
   }
 });
+
+function togglePeek() {
+  el('targeting-overlay')?.classList.toggle('peek');
+}
+
+function hidePeek() {
+  el('targeting-overlay')?.classList.remove('peek');
+}
 
 function sendAction(action) {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -522,7 +533,7 @@ function renderPlaying() {
       // If a Flip 3 stagger is still animating for the drawer's cards, wait until
       // all cards are visually revealed before showing the targeting overlay.
       if (revealProgress[pa.drawerID] !== undefined) {
-        hide('targeting-overlay');
+        hide('targeting-overlay'); hidePeek();
         hide('targeting-waiting');
         return;
       }
@@ -576,7 +587,7 @@ function renderPlaying() {
     } else {
       // Also delay the "waiting" notice until the drawer's cards are fully revealed.
       if (revealProgress[pa.drawerID] !== undefined) {
-        hide('targeting-overlay');
+        hide('targeting-overlay'); hidePeek();
         hide('targeting-waiting');
         return;
       }
@@ -954,6 +965,7 @@ function esc(str)     { return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;
 
 function hideAllOverlays() {
   ['lobby-overlay','round-end-overlay','game-over-overlay'].forEach(hide);
+  hidePeek();
   clearCountdown();
 }
 

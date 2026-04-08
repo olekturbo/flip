@@ -401,7 +401,45 @@ input[type="text"]:focus { border-color: var(--gold); }
   gap: 1rem;
   box-shadow: 0 0 40px rgba(245,158,11,0.3);
   margin: auto;
+  transition: padding 0.2s, gap 0.2s;
 }
+
+/* ── Peek mode — board visible behind transparent overlay ── */
+.targeting-overlay.peek {
+  background: rgba(0,0,0,0.08);
+  backdrop-filter: none;
+  align-items: flex-end;
+  pointer-events: none;        /* clicks pass through to board */
+}
+.targeting-overlay.peek .targeting-box {
+  pointer-events: all;         /* box stays interactive */
+  margin: 0 auto 0.5rem;
+  padding: 0.6rem 1rem;
+  gap: 0.4rem;
+  box-shadow: 0 0 24px rgba(245,158,11,0.5);
+}
+.targeting-overlay.peek .targeting-card-name,
+.targeting-overlay.peek .targeting-prompt,
+.targeting-overlay.peek .targeting-buttons {
+  display: none;
+}
+.targeting-overlay.peek .peek-icon-show { display: none; }
+.targeting-overlay.peek .peek-icon-hide { display: inline; }
+
+/* Peek button */
+.targeting-peek-btn {
+  align-self: flex-end;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.targeting-peek-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+.peek-icon-hide { display: none; }
 
 .targeting-card-name {
   font-size: 1.2rem;
