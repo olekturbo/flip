@@ -108,6 +108,20 @@ window.addEventListener('online', () => {
   connect();
 });
 
+// Keyboard shortcuts: (d) Draw, (s) Stop — active only when buttons are visible.
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  const drawBtn = el('btn-draw');
+  const stopBtn = el('btn-stop');
+  if (e.key === 'd' && drawBtn && !drawBtn.classList.contains('hidden')) {
+    sendAction('draw');
+  } else if (e.key === 's' && stopBtn && !stopBtn.classList.contains('hidden')) {
+    sendAction('stop');
+  }
+});
+
 function sendAction(action) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ action }));
