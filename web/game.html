@@ -119,7 +119,8 @@
     <button id="btn-stop" class="btn btn-secondary hidden" onclick="sendAction('stop')">Stop <kbd>S</kbd></button>
     <label id="auto-draw-label" class="auto-draw-label hidden">
       <input type="checkbox" id="auto-draw-cb" onchange="onAutoDrawChange()">
-      Auto-draw
+      <span class="auto-draw-track"><span class="auto-draw-thumb"></span></span>
+      <span class="auto-draw-text">Auto-draw</span>
     </label>
     <span id="countdown" class="hidden"></span>
     <!-- Shown to non-drawer players while target is being chosen -->
