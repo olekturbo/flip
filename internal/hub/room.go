@@ -71,6 +71,14 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	ctx, cancel := context.WithCancel(reqCtx)
 	defer cancel()
 
+	// Recover from any unexpected panic so one bad connection never crashes
+	// the whole server (and disconnects everyone else).
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("HandleConnection panic room=%s: %v", r.id, rec)
+		}
+	}()
+
 	// Increase the read limit to accommodate larger state messages.
 	conn.SetReadLimit(1 << 20) // 1 MiB
 
@@ -221,14 +229,27 @@ func (r *Room) broadcastState() {
 	if err != nil {
 		return
 	}
+
+	// Snapshot clients under read lock, then write outside the lock so a slow
+	// or dead client cannot block the mutex for the full write timeout.
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	clients := make([]*Client, 0, len(r.clients))
 	for _, c := range r.clients {
+		clients = append(clients, c)
+	}
+	r.mu.RUnlock()
+
+	for _, c := range clients {
 		c.writeMu.Lock()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = c.conn.Write(ctx, websocket.MessageText, data)
+		err := c.conn.Write(ctx, websocket.MessageText, data)
 		cancel()
 		c.writeMu.Unlock()
+		if err != nil {
+			// Write failed — the ping heartbeat will detect the dead connection
+			// and trigger normal cleanup; just log it here.
+			log.Printf("ws write error room=%s session=%s: %v", r.id, c.sessionID[:8], err)
+		}
 	}
 }
 
@@ -274,6 +295,13 @@ func (r *Room) isEmpty() bool {
 
 // ticker runs background housekeeping every 2 seconds.
 func (r *Room) ticker() {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("ticker panic room=%s: %v — restarting ticker", r.id, rec)
+			go r.ticker()
+		}
+	}()
+
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	emptyAt := time.Time{}
