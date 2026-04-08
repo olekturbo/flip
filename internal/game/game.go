@@ -1564,15 +1564,41 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 	g.emit(GameEvent{Type: "swap_success", PlayerID: drawer.ID, PlayerID2: partner.ID, CardName: drawerCard.Name, CardName2: partnerCard.Name})
 
 	if drawerBusts {
-		drawer.Status = StatusBusted
-		g.msg("%s received a duplicate %s — BUSTED!", drawer.Name, partnerCard.Name)
-		g.emit(GameEvent{Type: "bust", PlayerID: drawer.ID, CardValue: partnerCard.Value})
+		if drawer.HasSecondChance {
+			// SC saves drawer: undo drawer's side of the swap.
+			// Remove the duplicate partnerCard that was just given to drawer.
+			removeCard(&drawer.Cards, CardTypeNumber, partnerCard.Value)
+			// Remove drawerCard from partner and return it to drawer.
+			removeCard(&partner.Cards, CardTypeNumber, drawerCard.Value)
+			drawer.Cards = append(drawer.Cards, drawerCard)
+			g.UsedCards = append(g.UsedCards, partnerCard)
+			g.consumeSecondChance(drawer)
+			g.msg("%s — Second Chance saved from Swap bust! (%s returned)", drawer.Name, partnerCard.Name)
+			g.emit(GameEvent{Type: "second_chance", PlayerID: drawer.ID, CardValue: partnerCard.Value})
+		} else {
+			drawer.Status = StatusBusted
+			g.msg("%s received a duplicate %s — BUSTED!", drawer.Name, partnerCard.Name)
+			g.emit(GameEvent{Type: "bust", PlayerID: drawer.ID, CardValue: partnerCard.Value})
+		}
 		return
 	}
 	if partnerBusts {
-		partner.Status = StatusBusted
-		g.msg("%s received a duplicate %s from the swap — BUSTED!", partner.Name, drawerCard.Name)
-		g.emit(GameEvent{Type: "bust", PlayerID: partner.ID, CardValue: drawerCard.Value})
+		if partner.HasSecondChance {
+			// SC saves partner: undo partner's side of the swap.
+			// Remove the duplicate drawerCard that was just given to partner.
+			removeCard(&partner.Cards, CardTypeNumber, drawerCard.Value)
+			// Remove partnerCard from drawer and return it to partner.
+			removeCard(&drawer.Cards, CardTypeNumber, partnerCard.Value)
+			partner.Cards = append(partner.Cards, partnerCard)
+			g.UsedCards = append(g.UsedCards, drawerCard)
+			g.consumeSecondChance(partner)
+			g.msg("%s — Second Chance saved from Swap bust! (%s returned)", partner.Name, drawerCard.Name)
+			g.emit(GameEvent{Type: "second_chance", PlayerID: partner.ID, CardValue: drawerCard.Value})
+		} else {
+			partner.Status = StatusBusted
+			g.msg("%s received a duplicate %s from the swap — BUSTED!", partner.Name, drawerCard.Name)
+			g.emit(GameEvent{Type: "bust", PlayerID: partner.ID, CardValue: drawerCard.Value})
+		}
 		return
 	}
 

@@ -5,6 +5,16 @@ import (
 	"fmt"
 )
 
+// removeCard removes the first card of the given type and value from *cards.
+func removeCard(cards *[]Card, t CardType, value int) {
+	for i, c := range *cards {
+		if c.Type == t && c.Value == value {
+			*cards = append((*cards)[:i], (*cards)[i+1:]...)
+			return
+		}
+	}
+}
+
 // newUUID returns a random UUID v4-style identifier.
 func newUUID() string {
 	var b [16]byte
