@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -71,11 +72,18 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	ctx, cancel := context.WithCancel(reqCtx)
 	defer cancel()
 
+	// Declared early so the panic-recovery defer (below) can safely reference it.
+	var player *game.Player
+
 	// Recover from any unexpected panic so one bad connection never crashes
 	// the whole server (and disconnects everyone else).
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("HandleConnection panic room=%s: %v", r.id, rec)
+			pname := "<unknown>"
+			if player != nil {
+				pname = player.Name
+			}
+			log.Printf("HandleConnection panic room=%s player=%q: %v\n%s", r.id, pname, rec, debug.Stack())
 		}
 	}()
 
@@ -97,7 +105,6 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	}
 
 	// ── Step 2: resolve player (rejoin or new) ──────────────────────────────
-	var player *game.Player
 	sessionID := msg.SessionID
 
 	if sessionID != "" {
@@ -161,6 +168,12 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	// after their own timeout (~55 s).  A data frame is always counted.
 	// The browser ignores unknown message types, so no JS change is needed.
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("heartbeat panic room=%s player=%q: %v\n%s", r.id, player.Name, rec, debug.Stack())
+				cancel()
+			}
+		}()
 		ticker := time.NewTicker(20 * time.Second)
 		defer ticker.Stop()
 		pingMsg := []byte(`{"type":"ping"}`)
@@ -225,6 +238,11 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 }
 
 func (r *Room) handleAction(sessionID string, msg ClientMessage) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("handleAction panic room=%s session=%s action=%q: %v\n%s", r.id, sessionID[:8], msg.Action, rec, debug.Stack())
+		}
+	}()
 	var actionErr error
 	switch msg.Action {
 	case "start":
@@ -328,7 +346,7 @@ func (r *Room) isEmpty() bool {
 func (r *Room) ticker() {
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("ticker panic room=%s: %v — restarting ticker", r.id, rec)
+			log.Printf("ticker panic room=%s: %v — restarting ticker\n%s", r.id, rec, debug.Stack())
 			go r.ticker()
 		}
 	}()
