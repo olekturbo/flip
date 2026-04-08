@@ -39,8 +39,12 @@ func main() {
 		url := "http://localhost" + *addr + "/healthz"
 		client := &http.Client{Timeout: 5 * time.Second}
 		for range time.Tick(5 * time.Minute) {
-			if _, err := client.Get(url); err != nil {
+			resp, err := client.Get(url)
+			if err != nil {
 				log.Printf("self-ping failed: %v", err)
+			} else {
+				resp.Body.Close()
+				log.Printf("self-ping ok")
 			}
 		}
 	}()
