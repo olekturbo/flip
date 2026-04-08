@@ -59,6 +59,7 @@ func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
 
 	// Health check — used by the self-ping keepalive and external monitors.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("healthz ok (from %s)", r.RemoteAddr)
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprint(w, "ok")
 	})
