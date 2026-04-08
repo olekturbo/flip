@@ -86,3 +86,15 @@ Feature: Swap card
     And Bob no longer has Second Chance
     And it is Bob's turn
 
+  Scenario: Both players bust when the swap gives each a duplicate they already hold
+    Given Alice has [1, 2]
+    And Bob has [2, 1]
+    And the deck is [Swap]
+    When Alice draws
+    Then a target choice is pending
+    When Alice targets Bob
+    Then a target choice is pending
+    When Alice shuffles 1 for 2
+    Then Alice is busted
+    And Bob is busted
+

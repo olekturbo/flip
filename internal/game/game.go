@@ -1577,7 +1577,6 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 			g.msg("%s received a duplicate %s — BUSTED!", drawer.Name, partnerCard.Name)
 			g.emit(GameEvent{Type: "bust", PlayerID: drawer.ID, CardValue: partnerCard.Value})
 		}
-		return
 	}
 	if partnerBusts {
 		if partner.HasSecondChance {
@@ -1593,7 +1592,8 @@ func (g *Game) applyShuffleSwap(drawer, partner *Player, drawerCard, partnerCard
 			g.msg("%s received a duplicate %s from the swap — BUSTED!", partner.Name, drawerCard.Name)
 			g.emit(GameEvent{Type: "bust", PlayerID: partner.ID, CardValue: drawerCard.Value})
 		}
+	}
+	if drawerBusts || partnerBusts {
 		return
 	}
-
 }
