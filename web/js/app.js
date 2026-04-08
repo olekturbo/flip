@@ -126,6 +126,8 @@ document.addEventListener('keydown', (e) => {
     sendAction('stop');
   } else if (e.key === 'p' && overlay && !overlay.classList.contains('hidden')) {
     togglePeek();
+  } else if (e.key === 'b' && overlay?.classList.contains('peek')) {
+    togglePeek();
   }
 });
 
