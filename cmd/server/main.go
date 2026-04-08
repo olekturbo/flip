@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	assets "flip7"
 	"flip7/internal/api"
@@ -35,28 +34,6 @@ func main() {
 	// Self-ping every 10 minutes so Render.com's free tier does not spin the
 	// container down (it kills services after 15 min of no inbound HTTP traffic,
 	// even when WebSocket connections are active).
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("self-ping goroutine panic: %v", r)
-			}
-		}()
-		url := "http://127.0.0.1" + *addr + "/healthz"
-		client := &http.Client{Timeout: 5 * time.Second}
-		log.Printf("self-ping goroutine started, url=%s", url)
-		time.Sleep(10 * time.Second) // wait for server to be ready
-		for {
-			resp, err := client.Get(url)
-			if err != nil {
-				log.Printf("self-ping failed: %v", err)
-			} else {
-				resp.Body.Close()
-				log.Printf("self-ping ok")
-			}
-			time.Sleep(5 * time.Minute)
-		}
-	}()
-
 	if err := http.ListenAndServe(*addr, router); err != nil {
 		log.Fatal(err)
 	}
