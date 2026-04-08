@@ -401,6 +401,7 @@ input[type="text"]:focus { border-color: var(--gold); }
   gap: 1rem;
   box-shadow: 0 0 40px rgba(245,158,11,0.3);
   margin: auto;
+  position: relative;
   transition: padding 0.2s, gap 0.2s;
 }
 
@@ -426,19 +427,31 @@ input[type="text"]:focus { border-color: var(--gold); }
 .targeting-overlay.peek .peek-icon-show { display: none; }
 .targeting-overlay.peek .peek-icon-hide { display: inline; }
 
-/* Peek button */
+/* Peek button — small icon in the top-right corner of the targeting box */
 .targeting-peek-btn {
-  align-self: flex-end;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.15);
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
   color: var(--text-dim);
-  border-radius: 6px;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
+  font-size: 1rem;
   cursor: pointer;
-  transition: background 0.15s;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
 }
-.targeting-peek-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+.targeting-peek-btn:hover {
+  color: var(--gold);
+  background: rgba(255,255,255,0.08);
+}
+.targeting-overlay.peek .targeting-peek-btn {
+  color: var(--gold);
+}
 .peek-icon-hide { display: none; }
 
 .targeting-card-name {
