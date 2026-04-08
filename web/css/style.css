@@ -485,13 +485,29 @@ input[type="text"]:focus { border-color: var(--gold); }
 .btn-swap-pair {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.7rem;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
 }
 .swap-arrow {
   font-size: 1rem;
   color: var(--gold);
   flex-shrink: 0;
+}
+
+/* Cards inside swap buttons: dark theme so they don't clash with the overlay */
+.btn-swap-pair .card {
+  background: rgba(255,255,255,0.06) !important;
+  border: 2px solid rgba(3,105,161,0.6);   /* teal — matches swap card colour */
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 800;
+  width: 34px;
+  height: 46px;
+}
+.btn-swap-pair:hover .card {
+  border-color: var(--gold);
+  color: var(--gold-light);
+  background: rgba(255,255,255,0.10) !important;
 }
 
 /* ─── Rules modal ───────────────────────────────────────────────────────────── */
