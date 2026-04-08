@@ -184,12 +184,38 @@ func (r *Room) HandleConnection(conn *websocket.Conn, reqCtx context.Context) {
 	}()
 
 	// ── Step 7: read loop ────────────────────────────────────────────────────
+	// Token-bucket rate limiter: 10 actions/s sustained, burst of 15.
+	// Replenish one token every 100 ms; cap at 15 tokens.
+	const (
+		rlMax      = 15
+		rlInterval = 100 * time.Millisecond // 1 token per 100 ms = 10/s
+	)
+	rlTokens := rlMax
+	rlLast := time.Now()
+
 	for {
 		_, raw, err := conn.Read(ctx)
 		if err != nil {
 			log.Printf("ws read error room=%s player=%q: %v", r.id, player.Name, err)
 			break
 		}
+
+		// Replenish tokens based on elapsed time.
+		now := time.Now()
+		add := int(now.Sub(rlLast) / rlInterval)
+		if add > 0 {
+			rlTokens += add
+			if rlTokens > rlMax {
+				rlTokens = rlMax
+			}
+			rlLast = rlLast.Add(time.Duration(add) * rlInterval)
+		}
+		if rlTokens <= 0 {
+			log.Printf("ws rate-limited room=%s player=%q", r.id, player.Name)
+			continue
+		}
+		rlTokens--
+
 		var action ClientMessage
 		if json.Unmarshal(raw, &action) != nil {
 			continue
