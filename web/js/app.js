@@ -196,18 +196,20 @@ function spawnGhostCard(playerId, cssClass, label, title, delayMs = 0) {
 
 // Handle a structured game event emitted by the server.
 // Single source of truth for all banners + sounds — no string parsing.
-function handleGameEvent(evt) {
+function handleGameEvent(evt, delay = 0) {
   const byID = id => gameState.players.find(p => p.id === id);
 
   switch (evt.type) {
 
     case 'bust': {
       const p = byID(evt.playerID);
-      showActionBanner(
-        p ? `💥 ${p.name} BUSTED — duplicate ${evt.cardValue}!` : '💥 BUSTED!',
-        BANNER.bust
-      );
-      sndBust();
+      setTimeout(() => {
+        showActionBanner(
+          p ? `💥 ${p.name} BUSTED — duplicate ${evt.cardValue}!` : '💥 BUSTED!',
+          BANNER.bust
+        );
+        sndBust();
+      }, delay);
       break;
     }
 
@@ -316,15 +318,12 @@ function render() {
     prevSnapshot[0].roundNumber !== undefined &&
     prevSnapshot[0].roundNumber !== gameState.roundNumber;
 
-  // ── 1. Structured-event banners + sounds ──────────────────────────────────
-  // Single code path for all game events — no string parsing.
-  const evt = gameState.lastEvent;
-  if (evt && evt.seq !== prevEventSeq) {
-    prevEventSeq = evt.seq;
-    handleGameEvent(evt);
-  }
-
-  // ── 2. Card-arrival animations ─────────────────────────────────────────────
+  // ── 1. Card-arrival animations (first, so staggerDelays is ready) ───────────
+  // For each player receiving multiple new cards (Flip 3), compute how long the
+  // stagger will take so that bust banners/animations can be delayed to match.
+  const STAGGER_START = 500;
+  const STAGGER_STEP  = 950;
+  const staggerDelays = {}; // playerID → ms until last card is revealed
   gameState.players.forEach(p => {
     const prev      = prevSnapshot.find(pp => pp.id === p.id);
     const prevCount = isNewRound ? 0 : (prev ? prev.cards.length : 0);
@@ -332,8 +331,20 @@ function render() {
     if (prev && newCount > 0 && revealProgress[p.id] === undefined) {
       startCardReveals(p, prevCount);
       if (newCount === 1) sndCardDraw();
+      if (newCount > 1) {
+        // Last card appears at START + (n-1)*STEP; add buffer for card-new anim
+        staggerDelays[p.id] = STAGGER_START + (newCount - 1) * STAGGER_STEP + 350;
+      }
     }
   });
+
+  // ── 2. Structured-event banners + sounds ──────────────────────────────────
+  // Pass stagger delay so bust events fire only after the bust card is visible.
+  const evt = gameState.lastEvent;
+  if (evt && evt.seq !== prevEventSeq) {
+    prevEventSeq = evt.seq;
+    handleGameEvent(evt, staggerDelays[evt.playerID] || 0);
+  }
 
   // ── 3. State-diff events ───────────────────────────────────────────────────
   gameState.players.forEach(p => {
@@ -353,18 +364,18 @@ function render() {
         }, 80);
       }
       if (p.status === 'busted') {
-        blockTurnFor(1800);
+        const bustDelay = (staggerDelays[pid] || 0) + 80;
+        blockTurnFor(bustDelay + 1800);
         setTimeout(() => {
           const panel = document.querySelector(`[data-player-id="${pid}"]`);
           if (!panel) return;
           panel.classList.add('just-busted');
           panel.addEventListener('animationend', () => panel.classList.remove('just-busted'), { once: true });
-          // Ghost: the duplicate card that caused the bust
           const bustCard = p.cards[p.cards.length - 1];
           if (bustCard && bustCard.type === 'number') {
             spawnGhostCard(pid, 'ghost-bust-card', bustCard.value, `Duplicate ${bustCard.value} — BUSTED`);
           }
-        }, 80);
+        }, bustDelay);
       }
     }
   });
@@ -857,9 +868,26 @@ function renderPlayersGrid() {
   grid.innerHTML = gameState.players.map((p, i) => renderPlayerPanel(p, i)).join('');
 }
 
+function scoreFromCards(cards) {
+  const nums   = cards.filter(c => c.type === 'number');
+  const hasMul = cards.some(c => c.type === 'modifier_mul');
+  const hasDiv = cards.some(c => c.type === 'modifier_div');
+  let base = nums.reduce((s, c) => s + c.value, 0);
+  if (hasMul && !hasDiv) base *= 2;
+  else if (hasDiv && !hasMul) base = Math.floor(base / 2);
+  const mods = cards
+    .filter(c => c.type === 'modifier_add' || c.type === 'modifier_sub')
+    .reduce((s, c) => s + c.value, 0);
+  return Math.max(0, base + mods);
+}
+
 function renderPlayerPanel(p, i) {
   const isCurrent = gameState.phase === 'playing' && i === gameState.currentPlayerIndex;
   const isYou     = p.id === playerID;
+
+  // During Flip 3 stagger, hide bust status until the bust card is actually visible.
+  const isStaggering = revealProgress[p.id] !== undefined;
+  const displayStatus = isStaggering ? 'active' : p.status;
 
   const statusLabel = {
     active:   'Active',
@@ -867,16 +895,19 @@ function renderPlayerPanel(p, i) {
     busted:   'Busted',
     frozen:   'Frozen',
     inactive: 'Inactive',
-  }[p.status] || p.status;
+  }[displayStatus] || displayStatus;
 
   // During Flip 3 stagger, show only the cards revealed so far.
-  const visibleCount = revealProgress[p.id] !== undefined ? revealProgress[p.id] : (p.cards || []).length;
+  const visibleCount = isStaggering ? revealProgress[p.id] : (p.cards || []).length;
   const visibleCards = (p.cards || []).slice(0, visibleCount);
   const cards = visibleCards.map((c, ci) => {
-    const isBustCard = p.status === 'busted' && ci === visibleCards.length - 1 && visibleCount >= (p.cards || []).length;
+    const isBustCard = p.status === 'busted' && ci === visibleCards.length - 1 && !isStaggering;
     const numClass = c.type === 'number' ? ` card-n-${c.value}` : '';
     return `<div class="card card-${c.type}${numClass}${isBustCard ? ' card-bust-marker' : ''}" title="${esc(c.name)}">${esc(c.name)}</div>`;
   }).join('');
+
+  // During stagger, compute score from visible cards only (server score includes all).
+  const displayRoundScore = isStaggering ? scoreFromCards(visibleCards) : p.roundScore;
 
   const scIcon = p.hasSecondChance
     ? '<span class="second-chance-indicator">2nd Chance</span>'
@@ -887,18 +918,18 @@ function renderPlayerPanel(p, i) {
     : '';
 
   return `
-    <div class="player-panel ${p.status} ${isCurrent ? 'current-turn' : ''}" data-player-id="${p.id}">
+    <div class="player-panel ${displayStatus} ${isCurrent ? 'current-turn' : ''}" data-player-id="${p.id}">
       <div class="player-header">
         <span class="player-name">${esc(p.name)}</span>
         ${isYou  ? '<span class="player-you-badge">YOU</span>'  : ''}
         ${p.isHost ? '<span class="player-host-badge">Host</span>' : ''}
-        <span class="status-badge status-${p.status}">${statusLabel}</span>
+        <span class="status-badge status-${displayStatus}">${statusLabel}</span>
         ${scIcon}
       </div>
       <div class="player-scores">
         Total: <strong>${p.totalScore}</strong>
         &nbsp;|&nbsp;
-        Round: <strong>${p.roundScore}</strong>${p.roundBonus ? ` <span class="flip7-bonus-tag">+${p.roundBonus} 🎉</span>` : ''}
+        Round: <strong>${displayRoundScore}</strong>${!isStaggering && p.roundBonus ? ` <span class="flip7-bonus-tag">+${p.roundBonus} 🎉</span>` : ''}
       </div>
       ${disconnected}
       <div class="player-cards">${cards || '<span style="color:var(--text-dim);font-size:0.8rem">No cards</span>'}</div>
