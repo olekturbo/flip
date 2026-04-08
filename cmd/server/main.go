@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	assets "flip7"
 	"flip7/internal/api"
@@ -30,6 +31,20 @@ func main() {
 	router := api.NewRouter(h, webFS)
 
 	log.Printf("Flip 7 listening on %s", *addr)
+
+	// Self-ping every 10 minutes so Render.com's free tier does not spin the
+	// container down (it kills services after 15 min of no inbound HTTP traffic,
+	// even when WebSocket connections are active).
+	go func() {
+		url := "http://localhost" + *addr + "/healthz"
+		client := &http.Client{Timeout: 5 * time.Second}
+		for range time.Tick(10 * time.Minute) {
+			if _, err := client.Get(url); err != nil {
+				log.Printf("self-ping failed: %v", err)
+			}
+		}
+	}()
+
 	if err := http.ListenAndServe(*addr, router); err != nil {
 		log.Fatal(err)
 	}

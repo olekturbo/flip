@@ -57,6 +57,12 @@ func NewRouter(h *hub.Hub, webFS fs.FS) http.Handler {
 
 	mux := http.NewServeMux()
 
+	// Health check — used by the self-ping keepalive and external monitors.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "ok")
+	})
+
 	// REST: create a new room and return its ID.
 	mux.HandleFunc("POST /api/rooms", func(w http.ResponseWriter, r *http.Request) {
 		roomID := h.NewRoomID()
